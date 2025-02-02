@@ -16,27 +16,39 @@ class GameSys:
         self.menu = Menu(self.screen_width // 2 - 100, 250)
         self.roads = Roads('map.png', 0) # D:/CarRacing/Maps/map.png
 
-    def get_key_input(self):
+    def get_drive_direction(self):
+        drive_direction = None
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_w]:
+            drive_direction = 'forward'
+        elif keys[pygame.K_s]:
+            drive_direction = 'backward'
+        return drive_direction
+
+
+    def get_rotation_direction(self):
         keys = pygame.key.get_pressed()
         rotation_direction = 0
-        move_forward = False
-            
-        if keys[pygame.K_d]:
-                rotation_direction = -1
-        elif keys[pygame.K_a]:
-                rotation_direction = 1
-        
-        if keys[pygame.K_w]:
-            move_forward = True
+        drive_direction = self.get_drive_direction()
 
-        return rotation_direction, move_forward
+        if (drive_direction == 'forward'):
+            if keys[pygame.K_d]:
+              rotation_direction = -1
+            elif keys[pygame.K_a]:
+              rotation_direction = 1
+        
+        elif (drive_direction == 'backward'):
+            if keys[pygame.K_d]:
+              rotation_direction = 1
+            elif keys[pygame.K_a]:
+              rotation_direction = -1
+
+        return rotation_direction, drive_direction
 
     def run(self):
+        self.background.draw(self.screen)
+        self.menu.draw(self.screen)
         while self.running:
-            self.screen.fill((255, 255, 255)) # optimize
-            self.background.draw(self.screen) # optimize
-            # self.car.draw(self.screen)
-            self.menu.draw(self.screen) # optimize
             self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
             self.car.draw(self.screen)
             pygame.display.update()
@@ -44,14 +56,16 @@ class GameSys:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    pygame.quit()
+                    # pygame.quit()
             
-            rotation_direction, move_forward = self.get_key_input()
-
+            rotation_direction, drive_direction = self.get_rotation_direction()
             self.car.rotation_direction = rotation_direction
             self.car.rotate()
-            if move_forward:
+            if drive_direction == 'forward':
                 self.car.drive_forward()
+            elif drive_direction == 'backward':
+                self.car.drive_backward()
+        pygame.quit()
 
          
 class Menu:
@@ -91,11 +105,12 @@ class Cars:
         self.images = self.load_images("D:/course2/SEM2/CICD/Cars/")
         self.current_image = random.choice(self.images)
         self.rect = self.current_image.get_rect(center=(x, y))
-        self.rotation_intensity = 3
+        self.rotation_intensity = 2.3
         self.rotation_direction = 0
         self.speed = speed
-        self.max_speed = 3.3
+        self.max_speed = 2
         self.acceleration = 0.1
+        self.max_backward_speed = -1
     
     def load_images(self, base_path):
         return [pygame.image.load(f"{base_path}car{i}.png") for i in range(1, 6)]
@@ -106,17 +121,23 @@ class Cars:
         screen.blit(rotated_image, new_rect.topleft)
 
     def rotate(self):
-            self.angle += self.rotation_intensity * self.rotation_direction
+        self.angle += self.rotation_intensity * self.rotation_direction
 
     def drive_forward(self):
         self.speed = min(self.speed + self.acceleration, self.max_speed)
-        self.drive()
-
-    def drive(self):
         angle_value = math.radians(self.angle)
         vertical_shift = self.speed * math.cos(angle_value)
-        horizontal_shift = self.speed * math.sin(angle_value)
+        horizontal_shift = self.speed * (-math.sin(angle_value))
         self.y -= vertical_shift 
+        self.x += horizontal_shift
+        self.rect.center = (self.x, self.y)
+
+    def drive_backward(self):
+        self.speed = min(self.speed + self.acceleration, self.max_backward_speed)
+        angle_value = math.radians(self.angle)
+        vertical_shift = self.speed * (-math.cos(angle_value))
+        horizontal_shift = self.speed * math.sin(angle_value)
+        self.y += vertical_shift 
         self.x -= horizontal_shift
         self.rect.center = (self.x, self.y)
 
