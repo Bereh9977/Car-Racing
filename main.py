@@ -61,10 +61,18 @@ class GameSys:
             rotation_direction, drive_direction = self.get_rotation_direction()
             self.car.rotation_direction = rotation_direction
             self.car.rotate()
+            moved = False
+
             if drive_direction == 'forward':
+                moved = True
                 self.car.drive_forward()
             elif drive_direction == 'backward':
+                moved = True
                 self.car.drive_backward()
+
+            if not moved:
+                self.car.reduce_speed()
+
         pygame.quit()
 
          
@@ -125,6 +133,9 @@ class Cars:
 
     def drive_forward(self):
         self.speed = min(self.speed + self.acceleration, self.max_speed)
+        self.drive_forward_shift()
+
+    def drive_forward_shift(self):
         angle_value = math.radians(self.angle)
         vertical_shift = self.speed * math.cos(angle_value)
         horizontal_shift = self.speed * (-math.sin(angle_value))
@@ -134,12 +145,19 @@ class Cars:
 
     def drive_backward(self):
         self.speed = min(self.speed + self.acceleration, self.max_backward_speed)
+        self.drive_backward_shift()
+    
+    def drive_backward_shift(self):
         angle_value = math.radians(self.angle)
         vertical_shift = self.speed * (-math.cos(angle_value))
         horizontal_shift = self.speed * math.sin(angle_value)
         self.y += vertical_shift 
         self.x -= horizontal_shift
         self.rect.center = (self.x, self.y)
+
+    def reduce_speed(self):
+        self.speed = max(self.speed - self.acceleration / 4, 0)
+        self.drive_forward_shift()
 
 
 class Score:
