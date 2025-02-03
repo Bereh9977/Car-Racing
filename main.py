@@ -31,13 +31,13 @@ class GameSys:
         rotation_direction = 0
         drive_direction = self.get_drive_direction()
 
-        if (drive_direction == 'forward'):
+        if (drive_direction == 'forward' or self.car.speed > 0):
             if keys[pygame.K_d]:
               rotation_direction = -1
             elif keys[pygame.K_a]:
               rotation_direction = 1
         
-        elif (drive_direction == 'backward'):
+        elif (drive_direction == 'backward' or self.car.speed < 0):
             if keys[pygame.K_d]:
               rotation_direction = 1
             elif keys[pygame.K_a]:
@@ -71,7 +71,12 @@ class GameSys:
                 self.car.drive_backward()
 
             if not moved:
-                self.car.reduce_speed()
+                if self.car.speed > 0:
+                    self.car.reduce_speed_forward()
+                elif self.car.speed < 0:
+                    self.car.reduce_speed_backward()
+                else:
+                    pass
 
         pygame.quit()
 
@@ -144,7 +149,7 @@ class Cars:
         self.rect.center = (self.x, self.y)
 
     def drive_backward(self):
-        self.speed = min(self.speed + self.acceleration, self.max_backward_speed)
+        self.speed = max(self.speed - self.acceleration, self.max_backward_speed)
         self.drive_backward_shift()
     
     def drive_backward_shift(self):
@@ -155,10 +160,13 @@ class Cars:
         self.x -= horizontal_shift
         self.rect.center = (self.x, self.y)
 
-    def reduce_speed(self):
+    def reduce_speed_forward(self):
         self.speed = max(self.speed - self.acceleration / 4, 0)
         self.drive_forward_shift()
 
+    def reduce_speed_backward(self):
+        self.speed = min(self.speed + self.acceleration / 4, 0)
+        self.drive_backward_shift()
 
 class Score:
     def __init__(self, x, y):
