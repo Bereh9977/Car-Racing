@@ -81,7 +81,7 @@ class GameSys:
                     pass
 
             if self.car.collide(self.road_contour_mask) != None:
-                print("collide")
+                self.car.bounce()
 
         pygame.quit()
 
@@ -174,10 +174,21 @@ class Cars:
         self.drive_backward_shift()
 
     def collide(self, mask, x=0, y=0):
+        # Змінюємо offset, щоб врахувати позицію автомобіля
         car_mask = pygame.mask.from_surface(self.current_image)
         offset = (int(self.x - x), int(self.y - y))
         point_of_intersection = mask.overlap(car_mask, offset)
         return point_of_intersection
+
+    def bounce(self):
+        # Зміна швидкості на протилежну
+        self.speed = -self.speed
+        
+        # Визначаємо напрямок і рухаємо автомобіль
+        if self.speed < 0:
+            self.drive_backward()  # Відскок назад
+        else:
+            self.drive_forward()  # Відскок вперед
 
 class Score:
     def __init__(self, x, y):
