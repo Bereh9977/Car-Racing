@@ -1,20 +1,37 @@
 import pygame
 import random
 import math
+from utilities import scale_image
 
 pygame.init()
 
 class GameSys:
     def __init__(self):
         self.running = True
-        self.screen_width = 700
-        self.screen_height = 700
+        self.screen_width = 1920
+        self.screen_height = 1080
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption('Car Racing')
         self.background = Background('backgroundMenu.png', 0) # D:/CarRacing/Background/backgroundMenu.png
-        self.car = Cars(100, 350, 0)
+        self.car = Cars(400, 997, 0)
         self.menu = Menu(self.screen_width // 2 - 100, 250)
-        self.roads = Roads('map.png', 0) # D:/CarRacing/Maps/map.png
+        self.roads = Roads('map2.png', 0) # D:/CarRacing/Maps/map.png
+
+    def run(self):
+        self.background.draw(self.screen)
+        self.menu.draw(self.screen)
+        while self.running:
+            self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
+            self.car.draw(self.screen)
+            self.update_car()
+            pygame.display.update()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    pygame.quit()
+            
+        # pygame.quit()
 
     def get_drive_direction(self):
         drive_direction = None
@@ -26,10 +43,9 @@ class GameSys:
         return drive_direction
 
 
-    def get_rotation_direction(self):
+    def get_rotation_direction(self, drive_direction):
         keys = pygame.key.get_pressed()
         rotation_direction = 0
-        drive_direction = self.get_drive_direction()
 
         if (drive_direction == 'forward' or self.car.speed > 0):
             if keys[pygame.K_d]:
@@ -43,44 +59,30 @@ class GameSys:
             elif keys[pygame.K_a]:
               rotation_direction = -1
 
-        return rotation_direction, drive_direction
+        return rotation_direction
+    
+    def update_car(self):
+        drive_direction = self.get_drive_direction()
+        rotation_direction = self.get_rotation_direction(drive_direction)        
+        self.car.rotation_direction = rotation_direction
+        self.car.rotate()
+        moved = False
 
-    def run(self):
-        self.background.draw(self.screen)
-        self.menu.draw(self.screen)
-        while self.running:
-            self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
-            self.car.draw(self.screen)
-            pygame.display.update()
-            
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    # pygame.quit()
-            
-            rotation_direction, drive_direction = self.get_rotation_direction()
-            self.car.rotation_direction = rotation_direction
-            self.car.rotate()
-            moved = False
+        if drive_direction == 'forward':
+            moved = True
+            self.car.drive_forward()
+        elif drive_direction == 'backward':
+            moved = True
+            self.car.drive_backward()
 
-            if drive_direction == 'forward':
-                moved = True
-                self.car.drive_forward()
-            elif drive_direction == 'backward':
-                moved = True
-                self.car.drive_backward()
-
-            if not moved:
-                if self.car.speed > 0:
-                    self.car.reduce_speed_forward()
-                elif self.car.speed < 0:
-                    self.car.reduce_speed_backward()
-                else:
-                    pass
-
-        pygame.quit()
-
-         
+        if not moved:
+            if self.car.speed > 0:
+                self.car.reduce_speed_forward()
+            elif self.car.speed < 0:
+                self.car.reduce_speed_backward()
+            else:
+                pass        
+   
 class Menu:
     def __init__(self, x, y):
         self.x = x
@@ -112,18 +114,18 @@ class Background:
 
 class Cars:
     def __init__(self, x, y, speed):
-        self.angle = 0
+        self.angle = 270
         self.x = x  
         self.y = y  
         self.images = self.load_images("D:/course2/SEM2/CICD/Cars/")
-        self.current_image = random.choice(self.images)
+        self.current_image = scale_image(random.choice(self.images), 0.5)
         self.rect = self.current_image.get_rect(center=(x, y))
-        self.rotation_intensity = 2.3
+        self.rotation_intensity = 0.8
         self.rotation_direction = 0
         self.speed = speed
-        self.max_speed = 2
-        self.acceleration = 0.1
-        self.max_backward_speed = -1
+        self.max_speed = 0.8
+        self.acceleration = 0.01
+        self.max_backward_speed = -0.3
     
     def load_images(self, base_path):
         return [pygame.image.load(f"{base_path}car{i}.png") for i in range(1, 6)]
