@@ -1,7 +1,6 @@
 import pygame
 import random
 import math
-from utilities import scale_image
 
 pygame.init()
 
@@ -13,25 +12,11 @@ class GameSys:
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption('Car Racing')
         self.background = Background('backgroundMenu.png', 0) # D:/CarRacing/Background/backgroundMenu.png
-        self.car = Cars(400, 997, 0)
+        self.car = Cars(275, 460, 0)
         self.menu = Menu(self.screen_width // 2 - 100, 250)
         self.roads = Roads('map2.png', 0) # D:/CarRacing/Maps/map.png
-
-    def run(self):
-        self.background.draw(self.screen)
-        self.menu.draw(self.screen)
-        while self.running:
-            self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
-            self.car.draw(self.screen)
-            self.update_car()
-            pygame.display.update()
-            
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    pygame.quit()
-            
-        # pygame.quit()
+        self.road_contour = pygame.image.load('map2_contour.png')
+        self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
 
     def get_drive_direction(self):
         drive_direction = None
@@ -81,8 +66,30 @@ class GameSys:
             elif self.car.speed < 0:
                 self.car.reduce_speed_backward()
             else:
-                pass        
-   
+                pass   
+
+    def run(self):
+        self.background.draw(self.screen)
+        self.menu.draw(self.screen)
+        while self.running:
+            self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
+            self.car.draw(self.screen)
+            self.update_car()
+            pygame.display.update()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    pygame.quit()
+            
+            if self.car.collide(self.road_contour_mask) != None:
+                self.car.bounce()
+
+        pygame.quit()
+
+    
+
+         
 class Menu:
     def __init__(self, x, y):
         self.x = x
@@ -114,18 +121,18 @@ class Background:
 
 class Cars:
     def __init__(self, x, y, speed):
-        self.angle = 270
+        self.angle = 0
         self.x = x  
         self.y = y  
-        self.images = self.load_images("D:/course2/SEM2/CICD/Cars/")
-        self.current_image = scale_image(random.choice(self.images), 0.5)
+        self.images = self.load_images("D:/CarRacing/")
+        self.current_image = random.choice(self.images)
         self.rect = self.current_image.get_rect(center=(x, y))
-        self.rotation_intensity = 0.8
+        self.rotation_intensity = 2.3
         self.rotation_direction = 0
         self.speed = speed
-        self.max_speed = 0.8
-        self.acceleration = 0.01
-        self.max_backward_speed = -0.3
+        self.max_speed = 5
+        self.acceleration = 0.1
+        self.max_backward_speed = -1
     
     def load_images(self, base_path):
         return [pygame.image.load(f"{base_path}car{i}.png") for i in range(1, 6)]
@@ -169,6 +176,20 @@ class Cars:
     def reduce_speed_backward(self):
         self.speed = min(self.speed + self.acceleration / 4, 0)
         self.drive_backward_shift()
+
+    def collide(self, mask, x=0, y=0):
+        car_mask = pygame.mask.from_surface(self.current_image)
+        width, height = car_mask.get_size()
+        offset = (int(self.rect.centerx + x - width // 2), int(self.rect.centery + y - height // 2))
+        point_of_intersection = mask.overlap(car_mask, offset)
+        return point_of_intersection
+
+    def bounce(self):
+        self.speed = -0.5 * self.speed
+        if self.speed > 0:
+            self.drive_backward()
+        else:
+            self.drive_forward()
 
 class Score:
     def __init__(self, x, y):
