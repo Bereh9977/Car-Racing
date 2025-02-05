@@ -13,11 +13,11 @@ class GameSys:
         self.screen_height = 1080
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption('Car Racing')
-        self.background = Background('backgroundMenu.png', 0) # D:/CarRacing/Background/backgroundMenu.png
-        self.car = Cars(275, 460, 0) 
-        self.bot = Bots(215, 460, 0)  
-        self.menu = Menu(self.screen_width // 2 - 100, 250)
-        self.roads = Roads('map2.png', 0) # D:/CarRacing/Maps/map.png
+        self.background = pygame.image.load('backgroundMenu.png')
+        self.car = Cars(275, 460, 0)
+        self.bot = Bots(215, 460, 0)
+        self.menu = Menu(self.screen_width // 2 - 165, 350)
+        self.roads = Roads('map2.png', 0)
         self.road_contour = pygame.image.load('map2_contour.png')
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
         self.countdown_images = [
@@ -26,6 +26,7 @@ class GameSys:
             pygame.image.load('1.png'),
             pygame.image.load('GO.png')
         ]
+        self.in_menu = True  
 
     def get_drive_direction(self):
         drive_direction = None
@@ -68,11 +69,25 @@ class GameSys:
             pygame.display.update()  
             time.sleep(1) 
 
-    def run(self):
-        self.background.draw(self.screen)
-        self.menu.draw(self.screen)
+    def show_menu(self):
+        while self.in_menu:
+            self.screen.blit(self.background, (0, 0))  
+            self.menu.draw(self.screen)
+            pygame.display.update()
 
-        # Запускаємо зворотний відлік перед гонкою
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    self.in_menu = False
+                    pygame.quit()
+                    return
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Фікс: права кнопка миші
+                    if self.menu.start_rect.collidepoint(event.pos):
+                        self.in_menu = False  # Вихід із меню
+
+    def run(self):
+        self.show_menu()
         self.countdown()
 
         while self.running:
@@ -117,12 +132,10 @@ class Menu:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-
-        self.imageStart = self.load_image("startButton.png", (200, 80)) # D:/CarRacing/ButtonsImages/startButton.png
-        self.imageOptions = self.load_image("optionButton.png", (200, 80)) # D:/CarRacing/ButtonsImages/optionButton.png
-
+        self.imageStart = scale_image(self.load_image("startButton.png", (200, 80)), 1.5)
+        self.imageOptions = scale_image(self.load_image("optionButton.png", (200, 80)), 1.5)
         self.start_rect = self.imageStart.get_rect(topleft=(x, y))
-        self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 100))
+        self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 150))
 
     def load_image(self, path, size):
         img = pygame.image.load(path)
@@ -130,7 +143,7 @@ class Menu:
 
     def draw(self, screen):
         screen.blit(self.imageStart, self.start_rect.topleft)
-        screen.blit(self.imageOptions, self.options_rect.topleft)     
+        screen.blit(self.imageOptions, self.options_rect.topleft)  
     
 class Background:
     def __init__(self, imagePath, animSpeed):
@@ -164,21 +177,6 @@ class Cars:
         rotated_image = pygame.transform.rotate(self.current_image, self.angle)
         new_rect = rotated_image.get_rect(center=self.rect.center)
         screen.blit(rotated_image, new_rect.topleft)
-        
-        # car_mask = pygame.mask.from_surface(rotated_image)
-        # width, height = car_mask.get_size()
-
-        # for y in range(height):
-        #     for x in range(width):
-        #         if car_mask.get_at((x, y)):  # Якщо піксель перекривається з маскою (1)
-        #     # Враховуємо обертання при розрахунку координат пікселів
-        #             pos_x = self.rect.centerx + x - width // 2
-        #             pos_y = self.rect.centery + y - height // 2
-        #             pygame.draw.rect(screen, (255, 0, 0), (pos_x, pos_y, 1, 1))  # Червоний піксель
-        #         else:
-        #             pos_x = self.rect.centerx + x - width // 2
-        #             pos_y = self.rect.centery + y - height // 2
-        #             pygame.draw.rect(screen, (0, 0, 0), (pos_x, pos_y, 1, 1))
 
     def rotate(self):
         self.angle += self.rotation_intensity * self.rotation_direction
