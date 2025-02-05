@@ -28,10 +28,9 @@ class GameSys:
         return drive_direction
 
 
-    def get_rotation_direction(self):
+    def get_rotation_direction(self, drive_direction):
         keys = pygame.key.get_pressed()
         rotation_direction = 0
-        drive_direction = self.get_drive_direction()
 
         if (drive_direction == 'forward' or self.car.speed > 0):
             if keys[pygame.K_d]:
@@ -45,7 +44,29 @@ class GameSys:
             elif keys[pygame.K_a]:
               rotation_direction = -1
 
-        return rotation_direction, drive_direction
+        return rotation_direction
+    
+    def update_car(self):
+        drive_direction = self.get_drive_direction()
+        rotation_direction = self.get_rotation_direction(drive_direction)        
+        self.car.rotation_direction = rotation_direction
+        self.car.rotate()
+        moved = False
+
+        if drive_direction == 'forward':
+            moved = True
+            self.car.drive_forward()
+        elif drive_direction == 'backward':
+            moved = True
+            self.car.drive_backward()
+
+        if not moved:
+            if self.car.speed > 0:
+                self.car.reduce_speed_forward()
+            elif self.car.speed < 0:
+                self.car.reduce_speed_backward()
+            else:
+                pass   
 
     def run(self):
         self.background.draw(self.screen)
@@ -53,37 +74,20 @@ class GameSys:
         while self.running:
             self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
             self.car.draw(self.screen)
+            self.update_car()
             pygame.display.update()
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    # pygame.quit()
+                    pygame.quit()
             
-            rotation_direction, drive_direction = self.get_rotation_direction()
-            self.car.rotation_direction = rotation_direction
-            self.car.rotate()
-            moved = False
-
-            if drive_direction == 'forward':
-                moved = True
-                self.car.drive_forward()
-            elif drive_direction == 'backward':
-                moved = True
-                self.car.drive_backward()
-
-            if not moved:
-                if self.car.speed > 0:
-                    self.car.reduce_speed_forward()
-                elif self.car.speed < 0:
-                    self.car.reduce_speed_backward()
-                else:
-                    pass
-
             if self.car.collide(self.road_contour_mask) != None:
                 self.car.bounce()
 
         pygame.quit()
+
+    
 
          
 class Menu:
@@ -174,21 +178,18 @@ class Cars:
         self.drive_backward_shift()
 
     def collide(self, mask, x=0, y=0):
-        # Змінюємо offset, щоб врахувати позицію автомобіля
         car_mask = pygame.mask.from_surface(self.current_image)
-        offset = (int(self.x - x), int(self.y - y))
+        width, height = car_mask.get_size()
+        offset = (int(self.rect.centerx + x - width // 2), int(self.rect.centery + y - height // 2))
         point_of_intersection = mask.overlap(car_mask, offset)
         return point_of_intersection
 
     def bounce(self):
-        # Зміна швидкості на протилежну
-        self.speed = -self.speed
-        
-        # Визначаємо напрямок і рухаємо автомобіль
-        if self.speed < 0:
-            self.drive_backward()  # Відскок назад
+        self.speed = -0.5 * self.speed
+        if self.speed > 0:
+            self.drive_backward()
         else:
-            self.drive_forward()  # Відскок вперед
+            self.drive_forward()
 
 class Score:
     def __init__(self, x, y):
