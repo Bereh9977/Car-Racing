@@ -28,34 +28,6 @@ class GameSys:
         ]
         self.in_menu = True  
 
-    def get_drive_direction(self):
-        drive_direction = None
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_w]:
-            drive_direction = 'forward'
-        elif keys[pygame.K_s]:
-            drive_direction = 'backward'
-        return drive_direction
-
-
-    def get_rotation_direction(self, drive_direction):
-        keys = pygame.key.get_pressed()
-        rotation_direction = 0
-
-        if (drive_direction == 'forward' or self.car.speed > 0):
-            if keys[pygame.K_d]:
-              rotation_direction = -1
-            elif keys[pygame.K_a]:
-              rotation_direction = 1
-        
-        elif (drive_direction == 'backward' or self.car.speed < 0):
-            if keys[pygame.K_d]:
-              rotation_direction = 1
-            elif keys[pygame.K_a]:
-              rotation_direction = -1
-
-        return rotation_direction
-
     def countdown(self):
         for img in self.countdown_images:
             self.screen.fill((0, 0, 0))  
@@ -69,32 +41,18 @@ class GameSys:
             pygame.display.update()  
             time.sleep(1) 
 
-    def show_menu(self):
-        while self.in_menu:
-            self.screen.blit(self.background, (0, 0))  
-            self.menu.draw(self.screen)
-            pygame.display.update()
-
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    self.in_menu = False
-                    pygame.quit()
-                    return
-
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Фікс: права кнопка миші
-                    if self.menu.start_rect.collidepoint(event.pos):
-                        self.in_menu = False  # Вихід із меню
-
     def run(self):
-        self.show_menu()
+        if not self.menu.show(self.screen, self.background):
+            self.running = False
+            pygame.quit()
+            return        
         self.countdown()
 
         while self.running:
             self.roads.draw(self.screen)
             self.car.draw(self.screen)
             self.bot.draw(self.screen)
-            self.update_car()
+            self.car.update_car()
 
             pygame.display.update()
 
@@ -105,28 +63,8 @@ class GameSys:
                     
             if self.car.collide(self.road_contour_mask) is not None:
                 self.car.bounce()
-
-    def update_car(self):
-        drive_direction = self.get_drive_direction()
-        rotation_direction = self.get_rotation_direction(drive_direction)        
-        self.car.rotation_direction = rotation_direction
-        self.car.rotate()
-        moved = False
-
-        if drive_direction == 'forward':
-            moved = True
-            self.car.drive_forward()
-        elif drive_direction == 'backward':
-            moved = True
-            self.car.drive_backward()
-
-        if not moved:
-            if self.car.speed > 0:
-                self.car.reduce_speed_forward()
-            elif self.car.speed < 0:
-                self.car.reduce_speed_backward()
-            else:
-                pass       
+            
+            self.bot.move()    
          
 class Menu:
     def __init__(self, x, y):
@@ -143,7 +81,44 @@ class Menu:
 
     def draw(self, screen):
         screen.blit(self.imageStart, self.start_rect.topleft)
-        screen.blit(self.imageOptions, self.options_rect.topleft)  
+        screen.blit(self.imageOptions, self.options_rect.topleft)
+
+    def show_options_screen(self, screen):
+        font = pygame.font.Font(None, 50)  # шрифт 50
+        text = font.render("Options. press ESC, to back.", True, (255, 255, 255))
+
+        in_options = True
+        while in_options:
+            screen.fill((0, 0, 0))  
+            screen.blit(text, (screen.get_width() // 2 - text.get_width() // 2, screen.get_height() // 2))
+
+            pygame.display.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit() 
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    in_options = False  
+
+    def show(self, screen, background):
+        in_menu = True
+        while in_menu:
+            screen.blit(background, (0, 0))
+            self.draw(screen)
+            pygame.display.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return False  
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.start_rect.collidepoint(event.pos):
+                        in_menu = False  # Вихід із меню та початок гри
+                    elif self.options_rect.collidepoint(event.pos):
+                        self.show_options_screen(screen)  # Відкриваємо екран налаштувань
+        return True  
     
 class Background:
     def __init__(self, imagePath, animSpeed):
@@ -229,6 +204,56 @@ class Cars:
             self.drive_backward()  # Відскок назад
         else:
             self.drive_forward()  # Відскок вперед
+    
+    def get_drive_direction(self):
+        drive_direction = None
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_w]:
+            drive_direction = 'forward'
+        elif keys[pygame.K_s]:
+            drive_direction = 'backward'
+        return drive_direction
+
+
+    def get_rotation_direction(self, drive_direction):
+        keys = pygame.key.get_pressed()
+        rotation_direction = 0
+
+        if (drive_direction == 'forward' or self.speed > 0):
+            if keys[pygame.K_d]:
+              rotation_direction = -1
+            elif keys[pygame.K_a]:
+              rotation_direction = 1
+        
+        elif (drive_direction == 'backward' or self.speed < 0):
+            if keys[pygame.K_d]:
+              rotation_direction = 1
+            elif keys[pygame.K_a]:
+              rotation_direction = -1
+
+        return rotation_direction
+
+    def update_car(self):
+        drive_direction = self.get_drive_direction()
+        rotation_direction = self.get_rotation_direction(drive_direction)        
+        self.rotation_direction = rotation_direction
+        self.rotate()
+        moved = False
+
+        if drive_direction == 'forward':
+            moved = True
+            self.drive_forward()
+        elif drive_direction == 'backward':
+            moved = True
+            self.drive_backward()
+
+        if not moved:
+            if self.speed > 0:
+                self.reduce_speed_forward()
+            elif self.speed < 0:
+                self.reduce_speed_backward()
+            else:
+                pass     
 
 class Score:
     def __init__(self, x, y):
@@ -267,6 +292,43 @@ class Bots(Cars):
         (1236, 555), (1182, 401), (948, 196), (1194, 96), (1478, 207), 
         (1534, 540), (1382, 922), (933, 925), (562, 914), (281, 882), 
         (235, 683), (211, 461)]  # Список для кульок  
+
+    def calculate_angle(self):
+        target_x, target_y = self.points[self.current_point]
+        x_diff = target_x - self.x
+        y_diff = target_y - self.y
+
+        if y_diff == 0:
+            desired_radian_angle = math.pi / 2
+        else:
+            desired_radian_angle = math.atan(x_diff / y_diff)
+
+        if target_y > self.y:
+            desired_radian_angle += math.pi
+
+        difference_in_angle = self.angle - math.degrees(desired_radian_angle)
+        if difference_in_angle >= 180:
+            difference_in_angle -= 360
+
+        if difference_in_angle > 0:
+            self.angle -= min(self.rotation_intensity, abs(difference_in_angle))
+        else:
+            self.angle += min(self.rotation_intensity, abs(difference_in_angle))
+
+    def update_points(self):
+        target = self.points[self.current_point]
+        rect = pygame.Rect(
+            self.x, self.y, self.current_image.get_width(), self.current_image.get_height())
+        if rect.collidepoint(*target):
+            self.current_point += 1
+
+    def move(self):
+        if self.current_point >= len(self.points):
+            return
+
+        self.calculate_angle()
+        self.update_points()
+        super().drive_forward()
 
 if __name__ == "__main__":
     game = GameSys()
