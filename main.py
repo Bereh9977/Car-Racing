@@ -2,6 +2,7 @@ import pygame
 import random
 import math
 from utilities import scale_image
+import time
 
 pygame.init()
 
@@ -22,6 +23,7 @@ class GameSys:
         self.finish = Obstacles('finish.png', *self.finish_location)
         self.finish.image = scale_image(self.finish.image, 0.5)
         self.finish_mask = pygame.mask.from_surface(self.finish.image)
+        
 
     def get_drive_direction(self):
         drive_direction = None
@@ -86,15 +88,20 @@ class GameSys:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    pygame.quit()
             
             if self.car.collide(self.road_contour_mask) != None:
                 self.car.bounce()
 
 
             finish_collision_point = self.car.collide(self.finish_mask, *self.finish_location)
-            self.car.cross_finish(finish_collision_point)
-            
+            if self.car.cross_finish(finish_collision_point):
+                win_image = pygame.image.load('you_win.png')
+                win_img_rect = win_image.get_rect(center=(self.screen_width // 2, self.screen_height // 2))
+                self.screen.blit(win_image, win_img_rect)  
+                pygame.display.update()
+                time.sleep(5) 
+              
+
         pygame.quit()
 
     
@@ -136,6 +143,7 @@ class Cars:
         self.y = y  
         self.prev_x = x
         self.prev_y = y
+        self.starting_position = (x, y)
         self.images = self.load_images("D:/CarRacing/")
         self.current_image = random.choice(self.images)
         self.rect = self.current_image.get_rect(center=(x, y))
@@ -207,12 +215,22 @@ class Cars:
         if finish_collision_point == None:
             self.prev_x = self.x
             self.prev_y = self.y
+            return False
         else:
             if finish_collision_point[1] == 0:
                 self.x = self.prev_x
                 self.y = self.prev_y
+                return False
             else:
-                print("finish")
+                self.reset()
+                return True
+                  
+                
+
+    def reset(self):
+        self.x, self.y = self.starting_position
+        self.angle = 0
+        self.speed = 0
         
 
 
