@@ -1,6 +1,7 @@
 import pygame
 import random
 import math
+from utilities import scale_image
 
 pygame.init()
 
@@ -17,6 +18,10 @@ class GameSys:
         self.roads = Roads('map2.png', 0) # D:/CarRacing/Maps/map.png
         self.road_contour = pygame.image.load('map2_contour.png')
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
+        self.finish_location = (125, 500)
+        self.finish = Obstacles('finish.png', *self.finish_location)
+        self.finish.image = scale_image(self.finish.image, 0.5)
+        self.finish_mask = pygame.mask.from_surface(self.finish.image)
 
     def get_drive_direction(self):
         drive_direction = None
@@ -73,6 +78,7 @@ class GameSys:
         self.menu.draw(self.screen)
         while self.running:
             self.roads.draw(self.screen) # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
+            self.finish.draw(self.screen)
             self.car.draw(self.screen)
             self.update_car()
             pygame.display.update()
@@ -85,6 +91,10 @@ class GameSys:
             if self.car.collide(self.road_contour_mask) != None:
                 self.car.bounce()
 
+
+            finish_collision_point = self.car.collide(self.finish_mask, *self.finish_location)
+            self.car.cross_finish(finish_collision_point)
+            
         pygame.quit()
 
     
@@ -124,6 +134,8 @@ class Cars:
         self.angle = 0
         self.x = x  
         self.y = y  
+        self.prev_x = x
+        self.prev_y = y
         self.images = self.load_images("D:/CarRacing/")
         self.current_image = random.choice(self.images)
         self.rect = self.current_image.get_rect(center=(x, y))
@@ -180,7 +192,7 @@ class Cars:
     def collide(self, mask, x=0, y=0):
         car_mask = pygame.mask.from_surface(self.current_image)
         width, height = car_mask.get_size()
-        offset = (int(self.rect.centerx + x - width // 2), int(self.rect.centery + y - height // 2))
+        offset = (int(self.rect.centerx - x - width // 2), int(self.rect.centery - y - height // 2))
         point_of_intersection = mask.overlap(car_mask, offset)
         return point_of_intersection
 
@@ -190,6 +202,19 @@ class Cars:
             self.drive_backward()
         else:
             self.drive_forward()
+
+    def cross_finish(self, finish_collision_point):
+        if finish_collision_point == None:
+            self.prev_x = self.x
+            self.prev_y = self.y
+        else:
+            if finish_collision_point[1] == 0:
+                self.x = self.prev_x
+                self.y = self.prev_y
+            else:
+                print("finish")
+        
+
 
 class Score:
     def __init__(self, x, y):
@@ -207,9 +232,13 @@ class Roads:
         screen.blit(self.image, (self.x, self.y))
 
 class Obstacles:
-    def __init__(self, x, y):
+    def __init__(self, imagePath, x, y):
+        self.image = pygame.image.load(imagePath)
         self.x = x
         self.y = y
+
+    def draw(self, screen):
+        screen.blit(self.image, (self.x, self.y))
 
 class Bots(Cars):
     def __init__(self, x, y, speed):
