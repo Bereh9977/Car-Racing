@@ -31,9 +31,9 @@ class GameSys:
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
 
         self.countdown_images = [
-            pygame.image.load(os.path.join(current_directory, 'img', '3.png')),
-            scale_image(pygame.image.load(os.path.join(current_directory, 'img', '2.png')), 2),
-            pygame.image.load(os.path.join(current_directory, 'img', '1.png')),
+            scale_image(pygame.image.load(os.path.join(current_directory, 'img', '3.png')), 0.5),
+            scale_image(pygame.image.load(os.path.join(current_directory, 'img', '2.png')), 0.9),
+            scale_image(pygame.image.load(os.path.join(current_directory, 'img', '1.png')), 0.4),
             pygame.image.load(os.path.join(current_directory, 'img', 'GO.png'))
         ]
         self.in_menu = True
@@ -70,6 +70,10 @@ class GameSys:
                 if event.type == pygame.QUIT:
                     self.running = False
                     pygame.quit()
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.running = False
+                    pygame.quit()
+                    return
                     
             if self.car.collide(self.road_contour_mask) is not None:
                 self.car.bounce()
@@ -81,14 +85,15 @@ class Menu:
         self.x = x
         self.y = y
         current_directory = os.path.dirname(__file__)  # Визначення робочої області для шляхів, саме в межах репозиторію
-        self.imageStart = scale_image(self.load_image(os.path.join(current_directory, 'img', 'startButton.png'), (200, 80)), 1.5)
-        self.imageOptions = scale_image(self.load_image(os.path.join(current_directory, 'img', 'optionButton.png'), (200, 80)), 1.5)
-        self.start_rect = self.imageStart.get_rect(topleft=(x, y))
-        self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 150))
+        self.imageStart = self.load_image(os.path.join(current_directory, 'img', 'startButton.png'))
+        self.imageOptions = self.load_image(os.path.join(current_directory, 'img', 'optionButton.png'))
 
-    def load_image(self, path, size):
+        self.start_rect = self.imageStart.get_rect(topleft=(x - 100, y))
+        self.options_rect = self.imageOptions.get_rect(topleft=(x + 20, y + 150))
+
+    def load_image(self, path):
         img = pygame.image.load(path)
-        return pygame.transform.scale(img, size)
+        return img
 
     def draw(self, screen):
         screen.blit(self.imageStart, self.start_rect.topleft)
