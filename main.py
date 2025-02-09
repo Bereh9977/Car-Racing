@@ -91,6 +91,14 @@ class Menu:
         self.start_rect = self.imageStart.get_rect(topleft=(x - 100, y))
         self.options_rect = self.imageOptions.get_rect(topleft=(x + 20, y + 150))
 
+        self.selected_map = 0  # Змінна для вибору карти
+        self.selected_car = 0  # Змінна для вибору машинки
+
+        # Список доступних карт
+        self.maps = ['Map1', 'Map2', 'Map3']
+        # Список доступних машинок
+        self.cars = ['Car1', 'Car2', 'Car3']
+
     def load_image(self, path):
         img = pygame.image.load(path)
         return img
@@ -101,21 +109,39 @@ class Menu:
 
     def show_options_screen(self, screen):
         font = pygame.font.Font(None, 50)
-        text = font.render("Options. press ESC, to back.", True, (255, 255, 255))
+        text = font.render("Options. Press ESC to back.", True, (255, 255, 255))
+
+        # Текст для вибору карти та машини
+        map_text = font.render(f"Selected Map: {self.maps[self.selected_map]}", True, (255, 255, 255))
+        car_text = font.render(f"Selected Car: {self.cars[self.selected_car]}", True, (255, 255, 255))
 
         in_options = True
         while in_options:
-            screen.fill((0, 0, 0))  
-            screen.blit(text, (screen.get_width() // 2 - text.get_width() // 2, screen.get_height() // 2))
+            screen.fill((0, 0, 0))  # Очищаємо екран
+            screen.blit(text, (screen.get_width() // 2 - text.get_width() // 2, screen.get_height() // 10))
+
+            # Відображення вибору карти та машини
+            screen.blit(map_text, (screen.get_width() // 2 - map_text.get_width() // 2, screen.get_height() // 4))
+            screen.blit(car_text, (screen.get_width() // 2 - car_text.get_width() // 2, screen.get_height() // 3))
 
             pygame.display.update()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
-                    exit() 
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    in_options = False  
+                    exit()
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        in_options = False  # Вихід з опцій
+                    elif event.key == pygame.K_UP:
+                        self.selected_map = (self.selected_map - 1) % len(self.maps)  # Вибір попередньої карти
+                    elif event.key == pygame.K_DOWN:
+                        self.selected_map = (self.selected_map + 1) % len(self.maps)  # Вибір наступної карти
+                    elif event.key == pygame.K_LEFT:
+                        self.selected_car = (self.selected_car - 1) % len(self.cars)  # Вибір попередньої машини
+                    elif event.key == pygame.K_RIGHT:
+                        self.selected_car = (self.selected_car + 1) % len(self.cars)  # Вибір наступної машини
 
     def show(self, screen, background):
         in_menu = True
@@ -128,6 +154,11 @@ class Menu:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return False  
+                
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()  
+                        exit()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.start_rect.collidepoint(event.pos):
