@@ -19,7 +19,7 @@ class GameSys:
         self.bot = Bots(400, 992, 0, 0)
         self.menu = Menu(800, 450)
         self.roads = Roads('winter.jpg', 0)
-        self.obs = Obstacles(0, 0, 'snowflake.png')
+        self.obs = Obstacles(0, 0, 'snowflake.png','banana.png')
         self.road_contour = pygame.image.load('winter_edge.png')
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
         self.countdown_images = [
@@ -31,6 +31,7 @@ class GameSys:
         self.in_menu = True
         self.maps_page = MapsMenu(100, 100)
         self.choosing_map = False
+        self.map_choice = '0'
 
     def run(self):
         self.main_screen()
@@ -40,9 +41,9 @@ class GameSys:
         while self.running:
             self.roads.draw(self.screen)
             self.car.draw(self.screen)
-            self.car.update_car(self.obs)
+            self.car.update_car(self.obs, self.map_choice)
             self.bot.draw(self.screen) 
-            self.obs.draw(self.screen)
+            self.obs.draw_obstackles(self.screen, self.map_choice)
             pygame.display.update()
 
             for event in pygame.event.get():
@@ -91,9 +92,9 @@ class GameSys:
                     return
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    map_choice = self.maps_page.check_click(event.pos)
-                    if map_choice:
-                        self.start_game(map_choice)
+                    self.map_choice = self.maps_page.check_click(event.pos)
+                    if self.map_choice:
+                        self.start_game(self.map_choice)
 
     def start_game(self, map_choice):
         print(f"Selected map: {map_choice}")
@@ -102,8 +103,7 @@ class GameSys:
         if map_choice == 'winter':
             self.car = Cars(1350, 250, 0, 270)
             self.bot = Bots(1350, 287, 0, 270)
-            self.obs = Obstacles(100, 1800, 'snowflake.png')
-            self.road_contour = pygame.image.load('winter_edge.png')                       
+            self.road_contour = pygame.image.load('winter_edge.png')  
         elif map_choice == 'summer':
             self.car = Cars(1745, 945, 0, 52)
             self.bot = Bots(1755, 925, 0, 52)
@@ -190,10 +190,18 @@ class Cars:
         self.ice_image = pygame.image.load('ice-cube.png')  # Завантажуємо зображення льоду
         self.show_ice = False  # Флаг для показу льоду
         self.ice_time = 0  # Час початку показу льоду
+        self.spinning = False  # Чи машина обертається
+        self.spin_time = 0  # Час початку обертання
+        self.spin_duration = 1  # Тривалість обертання (в секундах)
+        self.spin_speed = 5  # Швидкість обертання (градусів за кадр)
     
     def check_freeze(self):
         if self.frozen and time.time() - self.freeze_time >= 1:  # Чекаємо 1 секунду
             self.frozen = False  # Відновлюємо рух
+
+    def check_spin(self):
+        if self.spinning and time.time() - self.spin_time >= self.spin_duration:
+            self.spinning = False  # Закінчити обертання
     
     def load_images(self, base_path):
         return [pygame.image.load(f"{base_path}car{i}.png") for i in range(1, 6)]
@@ -289,19 +297,26 @@ class Cars:
 
         return rotation_direction
     
-    def update_car(self, obs):
+    def update_car(self, obs, map_choice):
         self.check_freeze()  # Перевіряємо, чи закінчився час заморозки
+        self.check_spin()  # Перевіряємо, чи закінчилося обертання
 
-        if self.frozen:
-            return  # Машинка не рухається, якщо вона замерзла
+        if self.spinning:
+            self.angle += self.spin_speed  # Плавне обертання
+            return 
 
-        if obs.check_collision(self.rect):  # Якщо машина торкається сніжинки
-            self.frozen = True
-            self.freeze_time = time.time()
-            self.show_ice = True  # Показати лід
-            self.ice_time = pygame.time.get_ticks()  # Час початку накладання льоду
-            obs.show_snowflakes = False
-            return
+        if obs.check_collision_obstackles(self.rect, map_choice):  # Якщо машина торкається об'єкта
+            if map_choice == "winter":
+                self.frozen = True
+                self.freeze_time = time.time()
+                self.show_ice = True  # Показати лід
+                self.ice_time = pygame.time.get_ticks()  # Час початку накладання льоду
+                obs.show_snowflakes = False
+                return
+            elif map_choice == "beach":
+                self.spinning = True  # Почати обертання
+                self.spin_time = time.time()  # Запам'ятати час початку
+                return
 
         drive_direction = self.get_drive_direction()
         rotation_direction = self.get_rotation_direction(drive_direction)        
@@ -341,26 +356,48 @@ class Roads:
         screen.blit(self.image, (self.x, self.y))
 
 class Obstacles:
-    def __init__(self, x, y, imagePath):
+    def __init__(self, x, y, imagePath, imagePath2):
         self.image = pygame.image.load(imagePath)
-        self.snowflakes = [(539, 1025), (607, 577), (96, 780), (1588, 285)]  # Координати сніжинок
-        self.snowflake_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.snowflakes]
+        self.image2 = pygame.image.load(imagePath2)
+        self.snowflakes = [(539, 1025), (607, 577), (96, 780), (1588, 285), 
+                           (1395, 434), (1269, 657), (1679, 746), (628, 244), 
+                           (248, 1024), (1137, 708), (1821, 492), (360, 302)]  # Координати сніжинок
+        self.banana = [(1069, 555), (850, 1019), (1262, 522), (1632, 599),
+                        (1586, 854), (552, 851), (343, 919), (356, 659),
+                        (216, 481), (275, 505), (661, 887), (1610, 913)]
+        self.snowflakes_rand = random.sample(self.snowflakes, 4)
+        self.banana_rand = random.sample(self.banana, 4)
+        self.snowflake_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.snowflakes_rand]
+        self.banana_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.banana_rand]
         self.show_snowflakes = True
+        self.show_banana = True
 
-    def draw(self, screen):
-        for i, (x, y) in enumerate(self.snowflakes):
-            screen.blit(self.image, (x, y))
-            self.snowflake_rects[i].topleft = (x, y)  # Оновлюємо позицію
+    def draw_obstackles(self, screen, map_choice):
+        if map_choice == "winter":
+            for i, (x, y) in enumerate(self.snowflakes_rand):
+                screen.blit(self.image, (x, y))
+                self.snowflake_rects[i].topleft = (x, y)  # Оновлюємо позицію
+        elif map_choice =='beach':
+            for i, (x, y) in enumerate(self.banana_rand):
+                screen.blit(self.image2, (x, y))
+                self.banana_rects[i].topleft = (x, y) 
 
-    def check_collision(self, car_rect):
-        # Перевірка зіткнень і видалення сніжинок
-        for i, rect in enumerate(self.snowflake_rects):
-            if rect.colliderect(car_rect):
-                # Якщо зіткнення, видалити сніжинку
-                self.snowflakes.pop(i)
-                self.snowflake_rects.pop(i)
-                return True  # Зіткнення відбулося
-        return False
+    def check_collision_obstackles(self, car_rect, map_choice):
+        if map_choice == "winter":
+            for i, rect in enumerate(self.snowflake_rects):
+                if rect.colliderect(car_rect):
+                    # Якщо зіткнення, видалити сніжинку
+                    self.snowflakes_rand.pop(i)
+                    self.snowflake_rects.pop(i)
+                    return True  # Зіткнення відбулося
+        elif map_choice =='beach':
+            for i, rect in enumerate(self.banana_rects):
+                if rect.colliderect(car_rect):
+                    self.banana_rand.pop(i)
+                    self.banana_rects.pop(i)
+                    return True      
+        return False  # Якщо зіткнення не було
+
 
 
 class Bots(Cars):
