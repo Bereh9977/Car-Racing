@@ -16,7 +16,7 @@ class GameSys:
         pygame.display.set_caption('Car Racing')
         self.background = pygame.image.load('garage_blur.png')
         # self.car = Cars(400, 997, 0, 0, 'car1.png')
-        self.bot = Bots(400, 992, 0, 0)
+        # self.bot = Bots(400, 992, 0, 0, 0, [])
         self.menu = Menu(800, 450)
         self.roads = Roads('winter.jpg', 0)
         self.obs = Obstacles(0, 0, 'snowflake.png','banana.png')
@@ -113,28 +113,46 @@ class GameSys:
         self.roads = Roads(f"{map_choice}.jpg", 0)
         self.choosing_map = False
         if map_choice == 'winter':
-            self.car = Cars(1350, 250, 0, 270, image)
-            self.bot = Bots(1350, 287, 0, 270)
+            self.car = Cars(1350, 250, 0, 0.75, 270, image)
+            self.bot = Bots(1350, 287, 0, 0.75, 270, [(1654, 265), (1774, 309), (1822, 391), (1807, 657), 
+            (1721, 723), (1575, 681), (1539, 550), (1450, 468), (1317, 500), (1273, 607), (1197, 701), (1036, 739), 
+            (990, 815), (956, 929), (890, 990), (497, 1010), (184, 981), (138, 868), (139, 739), (162, 631),
+            (225, 564), (384, 550), (637, 549), (727, 485), (739, 365), (644, 289), (268, 285)])
             self.road_contour = pygame.image.load('winter_edge.png')                       
         elif map_choice == 'summer':
-            self.car = Cars(1745, 945, 0, 52, image)
-            self.bot = Bots(1755, 925, 0, 52)
+            self.car = Cars(1745, 945, 0, 0.5, 52, image)
+            self.bot = Bots(1755, 925, 0, 0.5, 52, [(1491, 749), (1344, 634), (1243, 555), (1200, 474), (1236, 383), 
+            (1308, 282), (1376, 185), (1366, 109), (1293, 62), (1203, 92), (1106, 121), (1024, 90), (944, 110), 
+            (858, 163), (759, 132), (671, 144), (591, 228), (492, 381), (475, 475), (541, 545), (695, 643), 
+            (792, 598), (796, 505), (764, 401), (812, 328), (903, 332), (938, 378), (934, 446), (901, 525), 
+            (942, 606), (1064, 700), (1112, 768), (1102, 847), (1028, 898), (965, 875), (891, 816), (808, 757), 
+            (719, 740), (643, 809), (583, 881), (523, 918), (440, 909), (362, 887), (306, 917), (208, 1032)])
             self.road_contour = pygame.image.load('summer_edge.png')
         elif map_choice == 'beach':
-            self.car = Cars(95, 990, 0, 270, image)
-            self.bot = Bots(95, 950, 0, 270)
+            self.car = Cars(95, 990, 0, 0.75, 270, image)
+            self.bot = Bots(95, 950, 0, 0.75, 270, [(336, 962), (489, 945), (547, 826), (490, 706), (329, 661), 
+            (268, 540), (347, 413), (619, 413), (709, 504), (714, 918), (767, 989), (901, 1005), (973, 921), 
+            (1005, 660), (1125, 596), (1248, 530), (1293, 407), (1428, 347), (1529, 414), (1566, 534), 
+            (1703, 602), (1808, 671), (1822, 767), (1780, 855), (1657, 894), (1575, 946), (1541, 1028)])
             self.road_contour = pygame.image.load('beach_edge.png')
         elif map_choice == 'champions_field':
-            self.car = Cars(330, 730, 0, 0, image)
-            self.bot = Bots(360, 730, 0, 0)
+            self.car = Cars(342, 650, 0, 0.85, 180, image)
+            self.bot = Bots(372, 650, 0, 0.85, 180, [(376, 853), (458, 908), (557, 952), (706, 931), (861, 943), 
+            (1140, 925), (1368, 950), (1499, 884), (1556, 767), (1541, 560), (1565, 337), (1526, 216), 
+            (1413, 154), (1200, 158), (927, 136), (661, 154), (441, 162), (355, 282), (342, 428), (340, 700)])
             self.road_contour = pygame.image.load('champions_field_edge.png')
         elif map_choice == 'map2':
-            self.car = Cars(95, 990, 0, 270, image)
-            self.bot = Bots(95, 950, 0, 270)
+            self.car = Cars(200, 487, 0, 0.78, 180, image)
+            self.bot = Bots(240, 487, 0, 0.78, 180, [(275, 808), (424, 880), (782, 899), (1061, 951), 
+            (1296, 888), (1479, 715), (1518, 516), (1512, 264), (1352, 135), (1090, 126), 
+            (954, 148), (898, 233), (972, 320), (1086, 375), (1217, 491), (1187, 601), (963, 650), 
+            (654, 603), (664, 410), (658, 252), (522, 142), (340, 194), (276, 301), (239, 514)])
             self.road_contour = pygame.image.load('map2_contour.png')
         else:
-            self.car = Cars(95, 990, 0, 270, image)
-            self.bot = Bots(95, 950, 0, 270)
+            self.car = Cars(160, 365, 0, 0.84, 180, image)
+            self.bot = Bots(120, 365, 0, 0.84, 180, [(166, 629), (161, 861), (280, 970), 
+            (560, 845), (697, 674), (995, 685), (1225, 561), (1569, 519), (1742, 413), 
+            (1665, 242), (1362, 245), (943, 219), (686, 87), (401, 71), (184, 158), (98, 386)])
             self.road_contour = pygame.image.load('map3_contour.png')
 
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
@@ -215,19 +233,19 @@ class Background:
         screen.blit(self.image, (self.x, self.y))
 
 class Cars:
-    def __init__(self, x, y, speed, angle, current_image):
+    def __init__(self, x, y, speed, max_speed, angle, current_image):
         self.angle = angle
         self.x = x  
         self.y = y  
         self.image = self.load_image(f"D:/course2/SEM2/CICD/Cars/{current_image}")
         self.current_image = scale_image(self.image, 0.5)
         self.rect = self.current_image.get_rect(center=(x, y))
-        self.rotation_intensity = 0.5
+        self.rotation_intensity = 0.6
         self.rotation_direction = 0
         self.speed = speed
-        self.max_speed = 0.5
+        self.max_speed = max_speed
         self.acceleration = 0.01
-        self.max_backward_speed = -0.3
+        self.max_backward_speed = -0.4
         self.freeze_time = 0  # Час, коли машина замерзла
         self.ice_image = pygame.image.load('ice-cube.png')  # Завантажуємо зображення льоду
         self.show_ice = False  # Флаг для показу льоду
@@ -334,7 +352,7 @@ class Cars:
 
     def bounce(self):
         # Зміна швидкості на протилежну
-            self.speed = -0.95 * self.speed
+            self.speed = -0.65 * self.speed
 
             if self.speed > 0:
                 self.drive_backward()  # Відскок назад
@@ -470,23 +488,17 @@ class Obstacles:
         return False  # Якщо зіткнення не було
 
 class Bots(Cars):
-    def __init__(self, x, y, speed, angle):
+    def __init__(self, x, y, speed, max_speed, angle, points):
         available_cars = [
             "car1.png", "car2.png", "car3.png", "car4.png", "car5.png"
         ]
         current_image = random.choice(available_cars)
 
-        super().__init__(x, y, speed, angle, current_image)
+        super().__init__(x, y, speed, max_speed, angle, current_image)
 
         self.target_y = 400  # Цільова координата Y
         self.current_point = 0
-        self.points = [(613, 983), (845, 983), (928, 945), (967, 841), 
-        (1045, 805), (1124, 769), (1160, 685), (1240, 648), (1299, 676), 
-        (1325, 731), (1361, 799), (1437, 818), (1494, 780), (1515, 694), 
-        (1506, 566), (1449, 518), (1248, 505), (1139, 489), (1096, 428), 
-        (1104, 248), (1104, 157), (1063, 108), (985, 100), (939, 138), 
-        (925, 192), (919, 346), (908, 431), (868, 477), (721, 480), (560, 477), 
-        (503, 517), (482, 585), (482, 711), (520, 759), (592, 774)]  # Список для кульок
+        self.points = points
 
     def draw_points(self, screen):
         for point in self.points:
