@@ -70,6 +70,7 @@ class GameSys:
 
             self.bot.move()
 
+            # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
             self.running = not self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot)
             
         # print(points_str)
@@ -148,7 +149,7 @@ class GameSys:
             self.road_contour = pygame.image.load('beach_edge.png')
         elif map_choice == 'champions_field':
             self.finish_location = (292, 668)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.37)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.37, required_circles = 2)
             self.car = Cars(342, 730, 0, 0.85, 180, image)
             self.bot = Bots(372, 730, 0, 0.85, 180, [(376, 853), (458, 908), (557, 952), (706, 931), (861, 943), 
             (1140, 925), (1368, 950), (1499, 884), (1556, 767), (1541, 560), (1565, 337), (1526, 216), 
@@ -156,7 +157,7 @@ class GameSys:
             self.road_contour = pygame.image.load('champions_field_edge.png')
         elif map_choice == 'map2':
             self.finish_location = (128, 400)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.5)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.5, required_circles = 2)
             self.car = Cars(200, 487, 0, 0.78, 180, image)
             self.bot = Bots(240, 487, 0, 0.78, 180, [(275, 808), (424, 880), (782, 899), (1061, 951), 
             (1296, 888), (1479, 715), (1518, 516), (1512, 264), (1352, 135), (1090, 126), 
@@ -165,7 +166,7 @@ class GameSys:
             self.road_contour = pygame.image.load('map2_contour.png')
         else:
             self.finish_location = (55, 278)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.53)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.53, required_circles = 2)
             self.car = Cars(160, 365, 0, 0.84, 180, image)
             self.bot = Bots(120, 365, 0, 0.84, 180, [(166, 629), (161, 861), (280, 970), 
             (560, 845), (697, 674), (995, 685), (1225, 561), (1569, 519), (1742, 413), 
@@ -363,7 +364,14 @@ class Cars:
         self.drive_backward_shift()
 
     def collide(self, mask, x=0, y=0):
-        # Змінюємо offset, щоб врахувати позицію автомобіля
+        """
+        Перевіряє зіткнення автомобіля з заданою маскою.
+
+        :param mask: Маска об'єкта, з яким перевіряється зіткнення.
+        :param x: Зміщення по осі X (за замовчуванням 0).
+        :param y: Зміщення по осі Y (за замовчуванням 0).
+        :return: Координати точки зіткнення або None, якщо зіткнення немає.
+        """
         car_mask = pygame.mask.from_surface(self.current_image)
         width, height = car_mask.get_size()
         offset = (int(self.rect.centerx - x - width // 2), int(self.rect.centery - y - height // 2))
@@ -371,15 +379,27 @@ class Cars:
         return point_of_intersection
 
     def bounce(self):
-        # Зміна швидкості на протилежну
-            self.speed = -0.65 * self.speed
+        """
+        Виконує відскок автомобіля після зіткнення, змінюючи напрямок руху.
 
-            if self.speed > 0:
-                self.drive_backward()  # Відскок назад
-            else:
-                self.drive_forward()  # Відскок вперед
+        Швидкість змінюється на протилежну з коефіцієнтом загасання 0.65.
+        Якщо автомобіль рухався вперед, після відскоку він рухається назад, і навпаки.
+        """
+        self.speed = -0.65 * self.speed
+
+        if self.speed > 0:
+            self.drive_backward()  # Відскок назад
+        else:
+            self.drive_forward()  # Відскок вперед
 
     def cross_finish(self, finish_collision_point, required_side):
+        """
+        Перевіряє, чи перетнув автомобіль фінішну лінію з правильної сторони.
+
+        :param finish_collision_point: Координати точки зіткнення з фінішною лінією.
+        :param required_side: Сторона, з якої має бути перетнута лінія ("top" або "bottom").
+        :return: True, якщо автомобіль коректно перетнув фініш, інакше False.
+        """
         if finish_collision_point is None:
             self.prev_coordinates = self.x, self.y
             return False
@@ -393,9 +413,15 @@ class Cars:
                 return False
             
     def reset(self):
+        """
+        Скидає позицію автомобіля до початкових координат та швидкості.
+
+        Після скидання автомобіль повертається на стартову позицію та перестає рухатися.
+        """
         self.x, self.y = self.starting_position
         self.angle = self.starting_angle
         self.speed = 0
+
 
     def get_drive_direction(self):
         drive_direction = None
@@ -721,38 +747,107 @@ class CarsMenu(ConfigurationMenu):
         return None
 
 class Finish:
-    def __init__(self, imagePath, x, y, angle, scale_value, required_side = "top"):
+    """
+    Клас Finish представляє фінішну лінію у грі. Відповідає за відстеження проходження 
+    фінішу машинами, підрахунок кіл та виведення результатів.
+    """
+
+    def __init__(self, imagePath, x, y, angle, scale_value, required_side="top", required_circles=1):
+        """
+        Ініціалізує об'єкт фінішу.
+
+        :param imagePath: Шлях до зображення фінішної лінії.
+        :param x: Початкова координата X.
+        :param y: Початкова координата Y.
+        :param angle: Кут повороту фінішної лінії.
+        :param scale_value: Масштабування зображення.
+        :param required_side: Сторона, з якої необхідно перетнути фініш (за замовчуванням "top").
+        :param required_circles: Кількість необхідних кіл для завершення гонки.
+        """
         self.image = scale_image(pygame.image.load(imagePath), scale_value)
         self.x = x
         self.y = y
         self.angle = angle
         self.required_side = required_side
+        self.required_circles = required_circles
+        self.car1_wins, self.car2_wins = 0, 0
 
     def draw(self, screen):
+        """
+        Малює фінішну лінію на екрані.
+
+        :param screen: Екран, на якому відображається фініш.
+        """
         rotated_image = pygame.transform.rotate(self.image, self.angle)
         self.mask = pygame.mask.from_surface(rotated_image)
         screen.blit(rotated_image, (self.x, self.y))
 
-    def crossed(self, screen, aspect_ratio, car, bot):
-        car_collision_point = car.collide(self.mask, self.x, self.y)
-        if car.cross_finish(car_collision_point, self.required_side):
-            self.show_result(screen, aspect_ratio, 'you_win.png')
+    def crossed(self, screen, aspect_ratio, car1, car2):
+        """
+        Визначає, чи перетнула машина фінішну лінію, та підраховує кола.
+
+        :param screen: Екран для відображення результатів.
+        :param aspect_ratio: Співвідношення сторін екрану.
+        :param car1: Об'єкт першої машини.
+        :param car2: Об'єкт другої машини.
+        :return: True, якщо гонка завершена, інакше False.
+        """
+        if self.car1_wins + self.car2_wins == self.required_circles:
+            if self.car1_wins > self.car2_wins:
+                self.show_result(screen, aspect_ratio, 'Car 1 Wins!')
+            elif self.car1_wins < self.car2_wins:
+                self.show_result(screen, aspect_ratio, 'Car 2 Wins!')
+            else:
+                self.show_result(screen, aspect_ratio, 'It\'s a Tie!')
+
             return True
 
-        bot_collision_point = bot.collide(self.mask, self.x, self.y)
-        if bot.cross_finish(bot_collision_point, self.required_side):
-            self.show_result(screen, aspect_ratio, 'you_lose.png')
-            return True
+        else:
+            car1_collision_point = car1.collide(self.mask, self.x, self.y)
+            car2_collision_point = car2.collide(self.mask, self.x, self.y)
+            if car1.cross_finish(car1_collision_point, self.required_side):
+                self.car1_wins += 1
+                self.display_circle_number(screen, aspect_ratio)
+                car1.reset()
+                car2.reset()
+        
+            elif car2.cross_finish(car2_collision_point, self.required_side):
+                self.car2_wins += 1
+                self.display_circle_number(screen, aspect_ratio)
+                car1.reset()
+                car2.reset()
 
-        return False
+            return False
 
+    def display_circle_number(self, screen, aspect_ratio):
+        """
+        Відображає поточний номер кола на екрані.
 
-    def show_result(self, screen, aspect_ratio, image_path):
-        result_image = pygame.image.load(image_path)
-        result_rect = result_image.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
-        screen.blit(result_image, result_rect)
+        :param screen: Екран, на якому відображається номер кола.
+        :param aspect_ratio: Співвідношення сторін екрану.
+        """
+        font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 72)
+        text = font.render(f"Circle #{self.car1_wins + self.car2_wins} out of {self.required_circles} done!", True, (255, 255, 0))
+        text_rect = text.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
+        screen.blit(text, text_rect)
+        pygame.display.update()
+        time.sleep(1)
+
+    def show_result(self, screen, aspect_ratio, message):
+        """
+        Відображає фінальний результат гонки на екрані.
+
+        :param screen: Екран, на якому відображається результат.
+        :param aspect_ratio: Співвідношення сторін екрану.
+        :param message: Текст повідомлення про переможця.
+        """
+        font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 72)
+        text = font.render(message, True, (255, 255, 0))
+        text_rect = text.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
+        screen.blit(text, text_rect)
         pygame.display.update()
         time.sleep(3)
+
         
 if __name__ == "__main__":
     game = GameSys()
