@@ -7,8 +7,6 @@ from abc import ABC, abstractmethod
 
 pygame.init()
 
-
-
 class GameSys:
     def __init__(self):
         self.running = True
@@ -72,8 +70,7 @@ class GameSys:
 
             self.bot.move()
 
-            finish_collision_point = self.car.collide(self.finish.mask, *self.finish_location)
-            self.finish.cross(self.screen, self.aspect_ratio, self.car, self.bot, finish_collision_point)
+            self.running = not self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot)
             
         # print(points_str)
         pygame.quit()    
@@ -598,7 +595,13 @@ class Bots(Cars):
 
         self.calculate_angle()
         self.update_points()
-        super().drive_forward()    
+        super().drive_forward()
+
+    def reset(self):
+        self.x, self.y = self.starting_position
+        self.angle = self.starting_angle
+        self.speed = 0
+        self.current_point = 0
 
 class ConfigurationMenu(ABC):
     def __init__(self, x, y):
@@ -730,17 +733,27 @@ class Finish:
         self.mask = pygame.mask.from_surface(rotated_image)
         screen.blit(rotated_image, (self.x, self.y))
 
-    def cross(self, screen, aspect_ratio, car, bot, collision_point):
-        if car.cross_finish(collision_point, self.required_side):
-                win_image = pygame.image.load('you_win.png')
-                win_img_rect = win_image.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
-                screen.blit(win_image, win_img_rect)  
-                pygame.display.update()
-                time.sleep(3)
-                car.reset()
-                bot.reset()
+    def crossed(self, screen, aspect_ratio, car, bot):
+        car_collision_point = car.collide(self.mask, self.x, self.y)
+        if car.cross_finish(car_collision_point, self.required_side):
+            self.show_result(screen, aspect_ratio, 'you_win.png')
+            return True
+
+        bot_collision_point = bot.collide(self.mask, self.x, self.y)
+        if bot.cross_finish(bot_collision_point, self.required_side):
+            self.show_result(screen, aspect_ratio, 'you_lose.png')
+            return True
+
+        return False
 
 
+    def show_result(self, screen, aspect_ratio, image_path):
+        result_image = pygame.image.load(image_path)
+        result_rect = result_image.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
+        screen.blit(result_image, result_rect)
+        pygame.display.update()
+        time.sleep(3)
+        
 if __name__ == "__main__":
     game = GameSys()
     game.run()
