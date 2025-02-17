@@ -14,16 +14,13 @@ class GameSys:
         self.screen = pygame.display.set_mode(self.aspect_ratio)
         pygame.display.set_caption('Car Racing')
         self.background = pygame.image.load('garage_blur.png')
-        # self.car = Cars(400, 997, 0, 0, 'car1.png')
-        # self.bot = Bots(400, 992, 0, 0, 0, [])
+        self.car = Cars(400, 997, 0, 0, 0, 'car1.png', 'wasd')
+        self.bot = Bots(400, 992, 0, 0, 0, [])
         self.menu = Menu(800, 450)
         self.roads = Roads('winter.jpg', 0)
-        self.obs = Obstacles(0, 0, 'snowflake.png','banana.png')
+        self.obs = Obstacles(0, 0, 'snowflake.png','banana.png', 'sand.png')
         self.road_contour = pygame.image.load('winter_edge.png')
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
-
-        
-
         self.countdown_images = [
             pygame.image.load('3.png'),
             scale_image(pygame.image.load('2.png'), 2),
@@ -33,23 +30,44 @@ class GameSys:
         self.in_menu = True
         self.maps_page = MapsMenu(80, 100)
         self.cars_page = CarsMenu(90, 100)
+        self.modes_page = ModesMenu(100, 100)
         self.choosing_map = False
         self.choosing_car = False
+        self.choosing_mode = False
         self.map_choice = '0'
-
+        self.mode_choice = '0'
+        self.car1 = Cars(400, 997, 0, 0.5, 0, 'car5.png', 'wasd')
+        self.car2 = Cars(500, 997, 0, 0.5, 0, 'car5.png', 'arrows')
+        
     def run(self):
         self.show_menu()
-        self.show_cars()
+        self.show_modes()
         if (self.running!= False):
-            self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.bot, self.aspect_ratio)
+            self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.car1, self.car2, self.bot, self.aspect_ratio, self.mode_choice)
 
+        # Змінна для регулювання кількості кадрів на секунду
+        clock = pygame.time.Clock()
         while self.running:
-            self.roads.draw(self.screen)  # Розкоментуй і зявиться карта і після цього нище напиши: self.car.draw(self.screen)
-            self.car.draw(self.screen)
-            self.car.update_car(self.obs, self.map_choice)
-            self.bot.draw(self.screen)  # Малюємо бота
-            self.obs.draw_obstackles(self.screen, self.map_choice)
+            self.roads.draw(self.screen)
             self.finish.draw(self.screen)
+            self.obs.draw_obstackles(self.screen, self.map_choice)
+
+            if self.mode_choice == 'single':
+                self.score.draw_coins(self.screen)
+                self.car.draw(self.screen)
+                self.car.update_car(self.obs, self.map_choice, self.score)
+                self.bot.draw(self.screen)  # Малюємо бота
+                # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
+                self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score)  # self.running = not 
+                self.score.draw_score(self.screen)
+
+            else:
+                self.car1.draw(self.screen)
+                self.car1.update_car(self.obs, self.map_choice, self.score)
+                self.car2.draw(self.screen)
+                self.car2.update_car(self.obs, self.map_choice, self.score)
+                # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
+                self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2)  # self.running = not 
 
             # Малюємо кульки через метод draw_points у Bots
             # self.bot.draw_points(self.screen)
@@ -65,14 +83,16 @@ class GameSys:
                 #     # Збираємо координати кульок у одному рядку
                 #     points_str = ", ".join([f"({x}, {y})" for x, y in self.bot.points])
 
-            if self.car.collide(self.road_contour_mask) != None:
-                self.car.bounce()
+            cars = [self.car, self.car1, self.car2]
+
+            for car in cars:
+                if car.collide(self.road_contour_mask):
+                    car.bounce()
 
             self.bot.move()
+            # Ліміт fps = 500
+            clock.tick(500)
 
-            # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
-            self.running = not self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot)
-            
         # print(points_str)
         pygame.quit()    
 
@@ -92,11 +112,11 @@ class GameSys:
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.menu.start_rect.collidepoint(event.pos):
                         self.in_menu = False
-                        self.choosing_car = True
-                        self.show_cars()
+                        self.choosing_mode = True
+                        self.show_modes()
 
 
-    def show_maps(self, image):
+    def show_maps(self):
         while self.choosing_map:
             self.screen.blit(self.background, (0, 0))  
             self.maps_page.draw(self.screen)
@@ -112,70 +132,23 @@ class GameSys:
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     self.map_choice = self.maps_page.check_click(event.pos)
                     if self.map_choice:
-                        self.choose_maps(self.map_choice, image)
+                        self.choose_maps(self.map_choice)
 
-    def choose_maps(self, map_choice, image):
+    def choose_maps(self, map_choice):
         print(f"Selected map: {map_choice}")
         self.roads = Roads(f"{map_choice}.jpg", 0)
         self.choosing_map = False
-        if map_choice == 'winter':
-            self.finish_location = (275, 230)
-            self.finish = Finish('finish.png', *self.finish_location, 90, 0.308, "bottom")
-            self.car = Cars(1350, 250, 0, 0.75, 270, image)
-            self.bot = Bots(1350, 287, 0, 0.75, 270, [(1654, 265), (1774, 309), (1822, 391), (1807, 657), 
-            (1721, 723), (1575, 681), (1539, 550), (1450, 468), (1317, 500), (1273, 607), (1197, 701), (1036, 739), 
-            (990, 815), (956, 929), (890, 990), (497, 1010), (184, 981), (138, 868), (139, 739), (162, 631),
-            (225, 564), (384, 550), (637, 549), (727, 485), (739, 365), (644, 289), (268, 285)])
-            self.road_contour = pygame.image.load('winter_edge.png')                       
-        elif map_choice == 'summer':
-            self.finish_location = (183, 985)
-            self.finish = Finish('finish.png', *self.finish_location, 142, 0.21, "bottom")
-            self.car = Cars(1745, 945, 0, 0.5, 52, image)
-            self.bot = Bots(1755, 925, 0, 0.5, 52, [(1491, 749), (1344, 634), (1243, 555), (1200, 474), (1236, 383), 
-            (1308, 282), (1376, 185), (1366, 109), (1293, 62), (1203, 92), (1106, 121), (1024, 90), (944, 110), 
-            (858, 163), (759, 132), (671, 144), (591, 228), (492, 381), (475, 475), (541, 545), (695, 643), 
-            (792, 598), (796, 505), (764, 401), (812, 328), (903, 332), (938, 378), (934, 446), (901, 525), 
-            (942, 606), (1064, 700), (1112, 768), (1102, 847), (1028, 898), (965, 875), (891, 816), (808, 757), 
-            (719, 740), (643, 809), (583, 881), (523, 918), (440, 909), (362, 887), (306, 917), (208, 1032)])
-            self.road_contour = pygame.image.load('summer_edge.png')
-        elif map_choice == 'beach':
-            self.finish_location = (1488, 993)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.308)
-            self.car = Cars(95, 990, 0, 0.75, 270, image)
-            self.bot = Bots(95, 950, 0, 0.75, 270, [(336, 962), (489, 945), (547, 826), (490, 706), (329, 661), 
-            (268, 540), (347, 413), (619, 413), (709, 504), (714, 918), (767, 989), (901, 1005), (973, 921), 
-            (1005, 660), (1125, 596), (1248, 530), (1293, 407), (1428, 347), (1529, 414), (1566, 534), 
-            (1703, 602), (1808, 671), (1822, 767), (1780, 855), (1657, 894), (1575, 946), (1541, 1028)])
-            self.road_contour = pygame.image.load('beach_edge.png')
-        elif map_choice == 'champions_field':
-            self.finish_location = (292, 668)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.37, required_circles = 2)
-            self.car = Cars(342, 730, 0, 0.85, 180, image)
-            self.bot = Bots(372, 730, 0, 0.85, 180, [(376, 853), (458, 908), (557, 952), (706, 931), (861, 943), 
-            (1140, 925), (1368, 950), (1499, 884), (1556, 767), (1541, 560), (1565, 337), (1526, 216), 
-            (1413, 154), (1200, 158), (927, 136), (661, 154), (441, 162), (355, 282), (342, 428), (340, 700)])
-            self.road_contour = pygame.image.load('champions_field_edge.png')
-        elif map_choice == 'map2':
-            self.finish_location = (128, 400)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.5, required_circles = 2)
-            self.car = Cars(200, 487, 0, 0.78, 180, image)
-            self.bot = Bots(240, 487, 0, 0.78, 180, [(275, 808), (424, 880), (782, 899), (1061, 951), 
-            (1296, 888), (1479, 715), (1518, 516), (1512, 264), (1352, 135), (1090, 126), 
-            (954, 148), (898, 233), (972, 320), (1086, 375), (1217, 491), (1187, 601), (963, 650), 
-            (654, 603), (664, 410), (658, 252), (522, 142), (340, 194), (276, 301), (239, 514)])
-            self.road_contour = pygame.image.load('map2_contour.png')
+        if self.mode_choice == 'single':
+            self.create_objects_single(map_choice)
         else:
-            self.finish_location = (55, 278)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.53, required_circles = 2)
-            self.car = Cars(160, 365, 0, 0.84, 180, image)
-            self.bot = Bots(120, 365, 0, 0.84, 180, [(166, 629), (161, 861), (280, 970), 
-            (560, 845), (697, 674), (995, 685), (1225, 561), (1569, 519), (1742, 413), 
-            (1665, 242), (1362, 245), (943, 219), (686, 87), (401, 71), (184, 158), (98, 386)])
-            self.road_contour = pygame.image.load('map3_contour.png')
-
-        self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
+            self.create_objects_doubles(map_choice)
 
     def show_cars(self):
+        if self.mode_choice == 'doubles':
+            self.choosing_car = False
+            self.choosing_map = True
+            self.show_maps()
+        
         while self.choosing_car:
             self.screen.blit(self.background, (0, 0))  
             self.cars_page.draw(self.screen)
@@ -208,8 +181,132 @@ class GameSys:
             self.image = 'car5.png'
 
         self.choosing_map = True
-        self.show_maps(self.image)
-         
+        self.show_maps()       
+
+    def show_modes(self):
+        while self.choosing_mode:
+            self.screen.blit(self.background, (0, 0))  
+            self.modes_page.draw(self.screen)
+            pygame.display.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    self.choosing_mode = False
+                    pygame.quit()
+                    return
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self.mode_choice = self.modes_page.check_click(event.pos, self.mode_choice)
+                    if self.mode_choice:
+                        self.choose_modes()
+
+    def choose_modes(self):
+        print(f"Selected mode: {self.mode_choice}")
+        self.choosing_mode = False
+        self.choosing_car = True
+        self.show_cars()
+
+    def create_objects_single(self, map_choice):
+        if map_choice == 'winter':
+            self.finish_location = (275, 230)
+            self.finish = Finish('finish.png', *self.finish_location, 90, 0.308, "bottom")
+            self.car = Cars(1350, 250, 0, 0.75, 270, self.image, 'wasd')
+            self.bot = Bots(1350, 287, 0, 0.67, 270, [(1654, 265), (1774, 309), (1822, 391), (1807, 657), 
+            (1721, 723), (1575, 681), (1539, 550), (1450, 468), (1317, 500), (1273, 607), (1197, 701), (1036, 739), 
+            (990, 815), (956, 929), (890, 990), (497, 1010), (184, 981), (138, 868), (139, 739), (162, 631),
+            (225, 564), (384, 550), (637, 549), (727, 485), (739, 365), (644, 289), (268, 285)])
+            self.road_contour = pygame.image.load('winter_edge.png')                       
+        elif map_choice == 'summer':
+            self.finish_location = (183, 985)
+            self.finish = Finish('finish.png', *self.finish_location, 142, 0.21, "bottom")
+            self.car = Cars(1745, 945, 0, 0.5, 52, self.image, 'wasd')
+            self.bot = Bots(1755, 925, 0, 0.48, 52, [(1491, 749), (1344, 634), (1243, 555), (1200, 474), (1236, 383), 
+            (1308, 282), (1376, 185), (1366, 109), (1293, 62), (1203, 92), (1106, 121), (1024, 90), (944, 110), 
+            (858, 163), (759, 132), (671, 144), (591, 228), (492, 381), (475, 475), (541, 545), (695, 643), 
+            (792, 598), (796, 505), (764, 401), (812, 328), (903, 332), (938, 378), (934, 446), (901, 525), 
+            (942, 606), (1064, 700), (1112, 768), (1102, 847), (1028, 898), (965, 875), (891, 816), (808, 757), 
+            (719, 740), (643, 809), (583, 881), (523, 918), (440, 909), (362, 887), (306, 917), (208, 1032)])
+            self.road_contour = pygame.image.load('summer_edge.png')
+        elif map_choice == 'beach':
+            self.finish_location = (1488, 993)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.308)
+            self.car = Cars(95, 990, 0, 0.75, 270, self.image, 'wasd')
+            self.bot = Bots(95, 950, 0, 0.67, 270, [(336, 962), (489, 945), (547, 826), (490, 706), (329, 661), 
+            (268, 540), (347, 413), (619, 413), (709, 504), (714, 918), (767, 989), (901, 1005), (973, 921), 
+            (1005, 660), (1125, 596), (1248, 530), (1293, 407), (1428, 347), (1529, 414), (1566, 534), 
+            (1703, 602), (1808, 671), (1822, 767), (1780, 855), (1657, 894), (1575, 946), (1541, 1028)])
+            self.road_contour = pygame.image.load('beach_edge.png')
+        elif map_choice == 'champions_field':
+            self.finish_location = (292, 668)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.37, required_circles = 2)
+            self.car = Cars(342, 730, 0, 0.85, 180, self.image, 'wasd')
+            self.bot = Bots(372, 730, 0, 0.87, 180, [(376, 853), (458, 908), (557, 952), (706, 931), (861, 943), 
+            (1140, 925), (1368, 950), (1499, 884), (1556, 767), (1541, 560), (1565, 337), (1526, 216), 
+            (1413, 154), (1200, 158), (927, 136), (661, 154), (441, 162), (355, 282), (342, 428), (340, 700)])
+            self.road_contour = pygame.image.load('champions_field_edge.png')
+        elif map_choice == 'map2':
+            self.finish_location = (128, 400)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.5, required_circles = 2)
+            self.car = Cars(200, 487, 0, 0.78, 180, self.image, 'wasd')
+            self.bot = Bots(240, 487, 0, 0.68, 180, [(275, 808), (424, 880), (782, 899), (1061, 951), 
+            (1296, 888), (1479, 715), (1518, 516), (1512, 264), (1352, 135), (1090, 126), 
+            (954, 148), (898, 233), (972, 320), (1086, 375), (1217, 491), (1187, 601), (963, 650), 
+            (654, 603), (664, 410), (658, 252), (522, 142), (340, 194), (276, 301), (239, 514)])
+            self.road_contour = pygame.image.load('map2_contour.png')
+        else:
+            self.finish_location = (55, 278)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.53, required_circles = 2)
+            self.car = Cars(160, 365, 0, 0.84, 180, self.image, 'wasd')
+            self.bot = Bots(120, 365, 0, 0.7, 180, [(166, 629), (161, 861), (280, 970), 
+            (560, 845), (697, 674), (995, 685), (1225, 561), (1569, 519), (1742, 413), 
+            (1665, 242), (1362, 245), (943, 219), (686, 87), (401, 71), (184, 158), (98, 386)])
+            self.road_contour = pygame.image.load('map3_contour.png')        
+
+        self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
+        self.score = Score("coin.png", map_choice)
+
+
+    def create_objects_doubles(self, map_choice):
+        if map_choice == 'winter':
+            self.finish_location = (275, 230)
+            self.finish = Finish('finish.png', *self.finish_location, 90, 0.308, "bottom")
+            self.car1 = Cars(1350, 250, 0, 0.75, 270, 'car1.png', 'wasd')
+            self.car2 = Cars(1350, 287, 0, 0.75, 270, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('winter_edge.png')                       
+        elif map_choice == 'summer':
+            self.finish_location = (183, 985)
+            self.finish = Finish('finish.png', *self.finish_location, 142, 0.21, "bottom")
+            self.car1 = Cars(1745, 945, 0, 0.5, 52, 'car1.png', 'wasd')
+            self.car2 = Cars(1755, 925, 0, 0.5, 52, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('summer_edge.png')
+        elif map_choice == 'beach':
+            self.finish_location = (1488, 993)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.308)
+            self.car1 = Cars(95, 990, 0, 0.75, 270, 'car1.png', 'wasd')
+            self.car2 = Cars(95, 950, 0, 0.75, 270, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('beach_edge.png')
+        elif map_choice == 'champions_field':
+            self.finish_location = (292, 668)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.37, required_circles = 2)
+            self.car1 = Cars(342, 730, 0, 0.85, 180, 'car1.png', 'wasd')
+            self.car2 = Cars(372, 730, 0, 0.85, 180, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('champions_field_edge.png')
+        elif map_choice == 'map2':
+            self.finish_location = (128, 400)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.5, required_circles = 2)
+            self.car1 = Cars(200, 487, 0, 0.78, 180, 'car1.png', 'wasd')
+            self.car2 = Cars(240, 487, 0, 0.78, 180, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('map2_contour.png')
+        else:
+            self.finish_location = (55, 278)
+            self.finish = Finish('finish.png', *self.finish_location, 0, 0.53, required_circles = 2)
+            self.car1 = Cars(160, 365, 0, 0.84, 180, 'car1.png', 'wasd')
+            self.car2 = Cars(120, 365, 0, 0.84, 180, 'car2.png', 'arrows')
+            self.road_contour = pygame.image.load('map3_contour.png')        
+
+        self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
+
 class Menu:
     def __init__(self, x, y):
         self.x = x
@@ -227,12 +324,18 @@ class Menu:
         screen.blit(self.imageStart, self.start_rect.topleft)
         screen.blit(self.imageOptions, self.options_rect.topleft)
 
-    def countdown(self, countdown_images, screen, roads, car, bot, aspect_ratio):
+    def countdown(self, countdown_images, screen, roads, car, car1, car2, bot, aspect_ratio, mode_choice):
         for img in countdown_images:
             screen.fill((0, 0, 0))
             roads.draw(screen)
-            car.draw(screen)
-            bot.draw(screen)
+
+            if mode_choice == 'single':
+                car.draw(screen)
+                bot.draw(screen)
+
+            else:
+                car1.draw(screen)
+                car2.draw(screen)
 
             img_rect = img.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
             screen.blit(img, img_rect)
@@ -251,10 +354,10 @@ class Background:
         screen.blit(self.image, (self.x, self.y))
 
 class Cars:
-    def __init__(self, x, y, speed, max_speed, angle, current_image):
+    def __init__(self, x, y, speed, max_speed, angle, current_image, controls):
         self.angle = angle
         self.x = x  
-        self.y = y
+        self.y = y  
         self.prev_coordinates = (x, y)
         self.starting_position = (x, y)  
         self.starting_angle = angle
@@ -276,6 +379,7 @@ class Cars:
         self.spin_duration = 1  # Тривалість обертання (в секундах)
         self.spin_speed = 5  # Швидкість обертання (градусів за кадр)
         self.frozen = False
+        self.controls = controls
     
     def load_image(self, base_path):
         return pygame.image.load(f"{base_path}")
@@ -302,31 +406,49 @@ class Cars:
     def get_drive_direction(self):
         drive_direction = None
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_w]:
-            drive_direction = 'forward'
-        elif keys[pygame.K_s]:
-            drive_direction = 'backward'
+
+        if self.controls == 'wasd':
+            if keys[pygame.K_w]:
+                drive_direction = 'forward'
+            elif keys[pygame.K_s]:
+                drive_direction = 'backward'
+        elif self.controls == 'arrows':
+            if keys[pygame.K_UP]:
+                drive_direction = 'forward'
+            elif keys[pygame.K_DOWN]:
+                drive_direction = 'backward'
         return drive_direction
 
 
-    def get_rotation_direction(self):
+    def get_rotation_direction(self, drive_direction):
         keys = pygame.key.get_pressed()
         rotation_direction = 0
-        drive_direction = self.get_drive_direction()
 
-        if (drive_direction == 'forward' or self.car.speed > 0):
-            if keys[pygame.K_d]:
-              rotation_direction = -1
-            elif keys[pygame.K_a]:
-              rotation_direction = 1
-        
-        elif (drive_direction == 'backward' or self.car.speed < 0):
-            if keys[pygame.K_d]:
-              rotation_direction = 1
-            elif keys[pygame.K_a]:
-              rotation_direction = -1
+        if self.controls == 'wasd':
+            if (drive_direction == 'forward' or self.speed > 0):
+                if keys[pygame.K_d]:
+                    rotation_direction = -1
+                elif keys[pygame.K_a]:
+                    rotation_direction = 1
+            elif (drive_direction == 'backward' or self.speed < 0):
+                if keys[pygame.K_d]:
+                    rotation_direction = 1
+                elif keys[pygame.K_a]:
+                    rotation_direction = -1
 
-        return rotation_direction, drive_direction
+        elif self.controls == 'arrows':
+            if (drive_direction == 'forward' or self.speed > 0):
+                if keys[pygame.K_RIGHT]:
+                    rotation_direction = -1
+                elif keys[pygame.K_LEFT]:
+                    rotation_direction = 1
+            elif (drive_direction == 'backward' or self.speed < 0):
+                if keys[pygame.K_RIGHT]:
+                    rotation_direction = 1
+                elif keys[pygame.K_LEFT]:
+                    rotation_direction = -1
+
+        return rotation_direction
 
     def rotate(self):
         self.angle += self.rotation_intensity * self.rotation_direction
@@ -411,7 +533,7 @@ class Cars:
             else:
                 self.x, self.y = self.prev_coordinates
                 return False
-            
+    
     def reset(self):
         """
         Скидає позицію автомобіля до початкових координат та швидкості.
@@ -420,48 +542,10 @@ class Cars:
         """
         self.x, self.y = self.starting_position
         self.angle = self.starting_angle
-        self.speed = 0
+        self.speed = 0.01
 
-
-    def get_drive_direction(self):
-        drive_direction = None
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_w]:
-            drive_direction = 'forward'
-        elif keys[pygame.K_s]:
-            drive_direction = 'backward'
-        return drive_direction
-
-
-    def get_rotation_direction(self, drive_direction):
-        keys = pygame.key.get_pressed()
-        rotation_direction = 0
-
-        if (drive_direction == 'forward' or self.speed > 0):
-            if keys[pygame.K_d]:
-              rotation_direction = -1
-            elif keys[pygame.K_a]:
-              rotation_direction = 1
-        
-        elif (drive_direction == 'backward' or self.speed < 0):
-            if keys[pygame.K_d]:
-              rotation_direction = 1
-            elif keys[pygame.K_a]:
-              rotation_direction = -1
-
-        return rotation_direction
     
-    def update_car(self, obs, map_choice):
-        self.check_freeze()  # Перевіряємо, чи закінчився час заморозки
-        self.check_spin()  # Перевіряємо, чи закінчилося обертання
-
-        if self.frozen:
-            return  # Блокуємо рух, поки машина заморожена
-
-        if self.spinning:
-            self.angle += self.spin_speed  # Плавне обертання
-            return 
-
+    def obstakles_feaches(self, obs, map_choice):
         if obs.check_collision_obstackles(self.rect, map_choice):  # Якщо машина торкається об'єкта
             if map_choice == "winter":
                 self.frozen = True
@@ -470,11 +554,32 @@ class Cars:
                 self.ice_time = pygame.time.get_ticks()  # Час початку накладання льоду
                 obs.show_snowflakes = False
                 return
-            elif map_choice == "beach" or "map3":
+            elif map_choice == "beach" or map_choice == "map3":
                 self.spinning = True  # Почати обертання
                 self.spin_time = time.time()  # Запам'ятати час початку
                 return
+            elif map_choice == "map2":  
+            # Якщо поворот ще не активовано, ініціалізуємо його
+                if not hasattr(self, "sand_turning") or time.time() - self.sand_turn_start >= 1.5: 
+                    self.sand_turning = random.choice([-1, 1])  # Випадковий напрямок повороту
+                    self.sand_turn_start = time.time()  # Час початку повороту
+                else:
+                    self.angle += self.sand_turning * 0.5  # Плавний поворот (0.5 градуса за кадр)
+    
+    def update_car(self, obs, map_choice, score):
+        self.check_freeze()  # Перевіряємо, чи закінчився час заморозки
+        self.check_spin()  # Перевіряємо, чи закінчилося обертання
 
+        if self.frozen:
+            return  # Блокуємо рух, поки машина заморожена
+
+        if self.spinning:
+            self.angle += self.spin_speed  # Плавне обертання
+            return             
+        
+        # Перевірка на зіштовхнення з монетками
+        score.check_collision(self.rect)
+        self.obstakles_feaches(obs, map_choice)      
         drive_direction = self.get_drive_direction()
         rotation_direction = self.get_rotation_direction(drive_direction)
         self.rotation_direction = rotation_direction
@@ -497,9 +602,129 @@ class Cars:
                 pass
 
 class Score:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
+    """
+    Клас для керування очками гравця та монетами у грі.
+
+    Відповідає за розміщення монет на карті, підрахунок очок,
+    збереження та завантаження очок із файлу, а також їхнє відображення на екрані.
+    """
+
+    def __init__(self, image_path, map_choice="none", file_path="score.txt"):
+        """
+        Ініціалізує об'єкт очок та монет.
+
+        :param image_path: Шлях до зображення монети.
+        :param map_choice: Назва карти для визначення можливих розташувань монет.
+                           Якщо "none", монети будуть розміщені випадково.
+        :param file_path: Шлях до файлу для збереження очок.
+        """
+        self.image = scale_image(pygame.image.load(image_path), 0.07)
+        self.file_path = file_path
+
+        # Визначення можливих позицій монет для кожної карти
+        self.coin_positions = {
+            "winter": [(515, 286), (630, 580), (219, 521), (179, 904), (605, 1009), 
+                       (881, 909), (1166, 632), (1377, 463), (1761, 583), (1712, 260)],
+            "beach": [(385, 932), (193, 521), (549, 366), (708, 702), (825, 1032), 
+                      (950, 610), (1263, 549), (1383, 310), (1620, 521), (1588, 835)],
+            "map3": [(40, 503), (190, 748), (488, 941), (766, 594), (1283, 586), 
+                     (1772, 371), (1577, 157), (1180, 295), (744, 91), (117, 156)],
+            "map2": [(162, 218), (165, 748), (564, 945), (1170, 849), (1540, 707), 
+                     (1441, 287), (1228, 22), (1056, 367), (582, 590), (538, 86)],
+            "summer": [(373, 869), (716, 686), (1003, 608), (923, 296), (462, 479), 
+                       (648, 176), (1008, 64), (1311, 247), (1165, 525), (1568, 776)],
+            "champions_field": [(376, 914), (711, 905), (1145, 960), (1494, 746), (1567, 391), 
+                                (1404, 84), (1103, 158), (765, 132), (320, 199), (391, 521)],
+            "none": [(random.randint(100, 1800), random.randint(100, 900)) for _ in range(5)]
+        }
+
+        # Вибираємо 5 випадкових монет із доступних позицій або всі, якщо їх менше
+        available_positions = self.coin_positions.get(map_choice, [])
+        self.coins = random.sample(available_positions, min(5, len(available_positions)))
+
+        # Створення об'єктів Rect для перевірки зіткнень
+        self.coin_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.coins]
+
+        # Завантаження очок із файлу
+        self.load_score()
+
+    def load_score(self):
+        """
+        Завантажує очки з файлу. Якщо файл не існує або пошкоджений, встановлює 0.
+        """
+        try:
+            with open(self.file_path, "r") as file:
+                self.current_score = int(file.read().strip())
+        except (FileNotFoundError, ValueError):
+            self.current_score = 0
+
+    def save_score(self):
+        """
+        Зберігає поточну кількість очок у файл.
+        """
+        with open(self.file_path, "w") as file:
+            file.write(str(self.current_score))
+
+    def draw_coins(self, screen):
+        """
+        Малює монети на екрані.
+
+        :param screen: Поверхня Pygame, на якій відображається гра.
+        """
+        for i, (x, y) in enumerate(self.coins):
+            screen.blit(self.image, (x, y))
+            self.coin_rects[i].topleft = (x, y)
+
+    def check_collision(self, car_rect):
+        """
+        Перевіряє, чи автомобіль зіткнувся з монетою. Якщо так, монета видаляється та додаються очки.
+
+        :param car_rect: Прямокутник (pygame.Rect), що представляє колізію автомобіля.
+        :return: True, якщо зіткнення було, False інакше.
+        """
+        for i, rect in enumerate(self.coin_rects):
+            if rect.colliderect(car_rect):
+                self.coins.pop(i)
+                self.coin_rects.pop(i)
+                self.add_score(100)
+                return True
+        return False
+
+    def add_score(self, amount):
+        """
+        Додає вказану кількість очок та зберігає оновлений рахунок.
+
+        :param amount: Кількість очок для додавання.
+        """
+        self.current_score += amount
+        self.save_score()
+
+    def subtract_score(self, amount):
+        """
+        Віднімає вказану кількість очок та зберігає оновлений рахунок.
+
+        :param amount: Кількість очок для віднімання.
+        """
+        self.current_score -= amount
+        self.save_score()
+
+    def clear_score(self):
+        """
+        Обнуляє рахунок гравця та зберігає зміни у файлі.
+        """
+        self.current_score = 0
+        self.save_score()
+
+    def draw_score(self, screen):
+        """
+        Відображає поточну кількість очок у правому верхньому куті екрана.
+
+        :param screen: Поверхня Pygame, на якій відображається гра.
+        """
+        font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 36)
+        score_text = font.render(f"Score: {self.current_score}", True, (255, 255, 255))
+        screen.blit(score_text, (1700, 10))  # Відображення у правому верхньому куті
+
 
 class Roads:
     def __init__(self, imagePath, animSpeed):
@@ -512,9 +737,10 @@ class Roads:
         screen.blit(self.image, (self.x, self.y))
 
 class Obstacles:
-    def __init__(self, x, y, imagePath, imagePath2):
+    def __init__(self, x, y, imagePath, imagePath2, imagePath3):
         self.image = pygame.image.load(imagePath)
         self.image2 = pygame.image.load(imagePath2)
+        self.image3 = pygame.image.load(imagePath3)
         self.snowflakes = [(539, 1025), (607, 577), (96, 780), (1588, 285), 
                            (1395, 434), (1269, 657), (1679, 746), (628, 244), 
                            (248, 1024), (1137, 708), (1821, 492), (360, 302)]  # Координати сніжинок
@@ -524,12 +750,17 @@ class Obstacles:
         self.banana2 = [(50, 954), (79, 737), (136, 497), (424, 50), 
                         (781, 165), (1240, 315), (1379, 173), (1547, 262), 
                         (1684, 456), (1345, 606), (1043, 563), (844, 665)]
+        self.sand = [(545, 805), (1329, 791), (1282, 469), (533, 503),
+                     (308, 196), (716, 651), (244, 715), (987, 193),
+                     (923, 610), (457, 867), (1256, 536), (187, 340)]
         self.snowflakes_rand = random.sample(self.snowflakes, 4)
         self.banana_rand = random.sample(self.banana, 4)
         self.banana2_rand = random.sample(self.banana2, 4)
+        self.sand_rand = random.sample(self.sand, 4)
         self.snowflake_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.snowflakes_rand]
         self.banana_rects = [pygame.Rect(x, y, self.image2.get_width(), self.image2.get_height()) for x, y in self.banana_rand]
         self.banana2_rects = [pygame.Rect(x, y, self.image2.get_width(), self.image2.get_height()) for x, y in self.banana2_rand]
+        self.sand_rects = [pygame.Rect(x, y, self.image3.get_width(), self.image3.get_height()) for x, y in self.sand_rand]
         self.show_snowflakes = True
         self.show_banana = True
 
@@ -546,6 +777,10 @@ class Obstacles:
             for i, (x, y) in enumerate(self.banana2_rand):
                 screen.blit(self.image2, (x, y))
                 self.banana2_rects[i].topleft = (x, y)
+        elif map_choice =='map2':
+            for i, (x, y) in enumerate(self.sand_rand):
+                screen.blit(self.image3, (x, y))
+                self.sand_rects[i].topleft = (x, y)
 
     def check_collision_obstackles(self, car_rect, map_choice):
         if map_choice == "winter":
@@ -567,6 +802,10 @@ class Obstacles:
                     self.banana2_rand.pop(i)
                     self.banana2_rects.pop(i)
                     return True
+        elif map_choice =='map2':
+            for i, rect in enumerate(self.sand_rects):
+                if rect.colliderect(car_rect):
+                    return True
         return False  # Якщо зіткнення не було
 
 class Bots(Cars):
@@ -575,8 +814,8 @@ class Bots(Cars):
             "car1.png", "car2.png", "car3.png", "car4.png", "car5.png"
         ]
         current_image = random.choice(available_cars)
-
-        super().__init__(x, y, speed, max_speed, angle, current_image)
+        controls = 'wasd'
+        super().__init__(x, y, speed, max_speed, angle, current_image, controls)
 
         self.target_y = 400  # Цільова координата Y
         self.current_point = 0
@@ -621,7 +860,8 @@ class Bots(Cars):
 
         self.calculate_angle()
         self.update_points()
-        super().drive_forward()
+        if self.controls == 'wasd':
+            super().drive_forward()    
 
     def reset(self):
         self.x, self.y = self.starting_position
@@ -634,7 +874,7 @@ class ConfigurationMenu(ABC):
         self.x = x
         self.y = y
         self.font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 36)
-        self.title_font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 48)
+        self.title_font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 56)
   
     def load_image(self, path):
         return pygame.image.load(path)
@@ -658,49 +898,49 @@ class MapsMenu(ConfigurationMenu):
     def __init__(self, x, y):
         super().__init__(x, y)
         
+        self.image_map3 = self.load_image("map3_preview.png")
+        self.image_map2 = self.load_image("map2_preview.png")
+        self.image_beach = self.load_image("beach_preview.png")
         self.image_winter = self.load_image("winter_preview.png")
         self.image_summer = self.load_image("summer_preview.png")
-        self.image_map2 = self.load_image("map3_preview.png") #"map2_preview.png"
         self.image_champions_field = self.load_image("champions_field_preview.png")
-        self.image_beach = self.load_image("beach_preview.png")
-        self.image_map3 = self.load_image("map3_preview.png")
         
-        self.winter_rect = self.image_winter.get_rect(topleft=(x, y + 130))
-        self.summer_rect = self.image_summer.get_rect(topleft=(x + 600, y + 130))
+        self.map3_rect = self.image_map3.get_rect(topleft=(x, y + 130))
         self.map2_rect = self.image_map2.get_rect(topleft=(x, y + 550))
-        self.champions_field_rect = self.image_champions_field.get_rect(topleft=(x + 600, y + 550))
-        self.beach_rect = self.image_beach.get_rect(topleft=(x + 1200, y + 130))
-        self.map3_rect = self.image_map3.get_rect(topleft=(x + 1200, y + 550))
+        self.beach_rect = self.image_beach.get_rect(topleft=(x + 600, y + 130))
+        self.winter_rect = self.image_winter.get_rect(topleft=(x + 600, y + 550))
+        self.summer_rect = self.image_summer.get_rect(topleft=(x + 1200, y + 130))
+        self.champions_field_rect = self.image_champions_field.get_rect(topleft=(x + 1200, y + 550))
 
     def draw(self, screen):
+        screen.blit(self.image_map3, self.map3_rect.topleft)
+        screen.blit(self.image_map2, self.map2_rect.topleft)
+        screen.blit(self.image_beach, self.beach_rect.topleft)
         screen.blit(self.image_winter, self.winter_rect.topleft)
         screen.blit(self.image_summer, self.summer_rect.topleft)
-        screen.blit(self.image_beach, self.beach_rect.topleft)
         screen.blit(self.image_champions_field, self.champions_field_rect.topleft)
-        screen.blit(self.image_map2, self.map2_rect.topleft)
-        screen.blit(self.image_map3, self.map3_rect.topleft)
 
-        self.draw_text("Select a map:", self.summer_rect.centerx, self.y, screen, self.title_font)
+        self.draw_text("Select a map:", self.beach_rect.centerx, self.y, screen, self.title_font)
+        self.draw_text("Tidal Heatwave", self.map3_rect.centerx, self.map3_rect.top - 30, screen)
+        self.draw_text("Meadow Rush", self.map2_rect.centerx, self.map2_rect.top - 30, screen)
+        self.draw_text("Palm Paradise", self.beach_rect.centerx, self.beach_rect.top - 30, screen)
         self.draw_text("Frozen Tides", self.winter_rect.centerx, self.winter_rect.top - 30, screen)
         self.draw_text("Evergreen Escape", self.summer_rect.centerx, self.summer_rect.top - 30, screen)
-        self.draw_text("Palm Paradise", self.beach_rect.centerx, self.beach_rect.top - 30, screen)
         self.draw_text("Champions Field", self.champions_field_rect.centerx, self.champions_field_rect.top - 30, screen)
-        self.draw_text("Meadow Rush", self.map2_rect.centerx, self.map2_rect.top - 30, screen)
-        self.draw_text("Tidal Heatwave", self.map3_rect.centerx, self.map3_rect.top - 30, screen)
 
     def check_click(self, pos):
-        if self.winter_rect.collidepoint(pos):
+        if self.map3_rect.collidepoint(pos):
+            return 'map3'
+        elif self.map2_rect.collidepoint(pos):
+            return 'map2'
+        elif self.beach_rect.collidepoint(pos):
+            return 'beach'
+        elif self.winter_rect.collidepoint(pos):
             return 'winter'
         elif self.summer_rect.collidepoint(pos):
             return 'summer'
-        elif self.beach_rect.collidepoint(pos):
-            return 'beach'
         elif self.champions_field_rect.collidepoint(pos):
             return 'champions_field'
-        elif self.map2_rect.collidepoint(pos):
-            return 'map2'
-        elif self.map3_rect.collidepoint(pos):
-            return 'map3'
         return None
 
 class CarsMenu(ConfigurationMenu):
@@ -745,6 +985,34 @@ class CarsMenu(ConfigurationMenu):
         elif self.car5_rect.collidepoint(pos):
             return 'car5'
         return None
+    
+class ModesMenu(ConfigurationMenu):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+
+        self.image_single = self.load_image("single.png")        
+        self.image_doubles = self.load_image("doubles.png")
+
+        self.single_rect = self.image_single.get_rect(topleft=(x - 70, y + 250))
+        self.doubles_rect = self.image_doubles.get_rect(topleft=(x + 890, y + 250))
+
+    def draw(self, screen):
+        screen.blit(self.image_single, self.single_rect.topleft)
+        screen.blit(self.image_doubles, self.doubles_rect.topleft)
+
+        self.draw_text("Select the game mode:", self.x + 855, self.y + 50, screen, self.title_font)
+        self.draw_text("Single", self.single_rect.centerx, self.single_rect.top - 30, screen)
+        self.draw_text("Doubles", self.doubles_rect.centerx, self.doubles_rect.top - 30, screen)
+
+    def check_click(self, pos, mode_choice):
+        if self.single_rect.collidepoint(pos):
+            mode_choice = 'single'
+            return mode_choice
+        elif self.doubles_rect.collidepoint(pos):
+            mode_choice = 'doubles'
+            return mode_choice
+        
+        return None
 
 class Finish:
     """
@@ -782,7 +1050,7 @@ class Finish:
         self.mask = pygame.mask.from_surface(rotated_image)
         screen.blit(rotated_image, (self.x, self.y))
 
-    def crossed(self, screen, aspect_ratio, car1, car2):
+    def crossed(self, screen, aspect_ratio, car1, car2, score = None):
         """
         Визначає, чи перетнула машина фінішну лінію, та підраховує кола.
 
@@ -795,10 +1063,12 @@ class Finish:
         if self.car1_wins + self.car2_wins == self.required_circles:
             if self.car1_wins > self.car2_wins:
                 self.show_result(screen, aspect_ratio, 'Car 1 Wins!')
+                self.credit_prize(score, 200)
             elif self.car1_wins < self.car2_wins:
                 self.show_result(screen, aspect_ratio, 'Car 2 Wins!')
             else:
                 self.show_result(screen, aspect_ratio, 'It\'s a Tie!')
+                self.credit_prize(score, 100)
 
             return True
 
@@ -818,6 +1088,10 @@ class Finish:
                 car2.reset()
 
             return False
+
+    def credit_prize(self, score, amount):
+        if score != None:
+            score.add_score(amount)
 
     def display_circle_number(self, screen, aspect_ratio):
         """
@@ -848,7 +1122,6 @@ class Finish:
         pygame.display.update()
         time.sleep(3)
 
-        
 if __name__ == "__main__":
     game = GameSys()
     game.run()
