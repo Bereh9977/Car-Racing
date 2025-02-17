@@ -30,7 +30,7 @@ class GameSys:
         ]
         self.in_menu = True
         self.score = Score("coin.png")
-        self.maps_page = MapsMenu(80, 100)
+        self.maps_page = MapsMenu(80, 100, self.score)
         self.cars_page = CarsMenu(90, 100, self.score)
         self.modes_page = ModesMenu(100, 100)
         self.choosing_map = False
@@ -317,7 +317,7 @@ class Menu:
         self.y = y
         self.imageStart = self.load_image("start.png", (289, 143))
         self.imageOptions = self.load_image("options.png", (289, 143))
-        self.imageBack = self.load_image("back.png", (289, 143))
+        self.imageBack = self.load_image("back.png", (288, 103))
         self.start_rect = self.imageStart.get_rect(topleft=(x, y))
         self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 200))
         self.back_rect = self.imageBack.get_rect(topleft=(x, y + 200))
@@ -638,7 +638,7 @@ class Score:
     збереження та завантаження очок із файлу, а також їхнє відображення на екрані.
     """
 
-    def __init__(self, image_path, map_choice="none", file_path="score.txt", car_file_path="purchased_cars.txt"):
+    def __init__(self, image_path, map_choice="none", file_path="score.txt", car_file_path="purchased_cars.txt", map_file_path="purchased_maps.txt"):
         """
         Ініціалізує об'єкт очок та монет.
 
@@ -650,8 +650,11 @@ class Score:
         self.image = scale_image(pygame.image.load(image_path), 0.07)
         self.file_path = file_path
         self.car_purchased = False  # Додаємо змінну, яка відстежує покупку
+        self.map_purchased = False  
         self.car_file_path = car_file_path
+        self.map_file_path = map_file_path
         self.buy_price = 3000
+        self.buy_price2 = 5000
 
         # Визначення можливих позицій монет для кожної карти
         self.coin_positions = {
@@ -742,6 +745,27 @@ class Score:
                 self.save_purchased_cars(purchased_cars)
                 return True
         return False
+    
+    def load_purchased_maps(self):
+        if not os.path.exists(self.map_file_path):
+            return set()
+        with open(self.map_file_path, "r") as file:
+            return set(file.read().splitlines())
+    
+    def save_purchased_maps(self, purchased_maps):
+        with open(self.map_file_path, "w") as file:
+            file.write("\n".join(purchased_maps))
+    
+    def purchase_map(self, map_name):
+        if self.current_score >= self.buy_price2:
+            purchased_maps = self.load_purchased_maps()
+            if map_name not in purchased_maps:
+                purchased_maps.add(map_name)
+                self.current_score -= self.buy_price2
+                self.save_score()
+                self.save_purchased_maps(purchased_maps)
+                return True
+        return False
 
     def add_score(self, amount):
         """
@@ -785,6 +809,15 @@ class Score:
     def check_buy_click(self, pos, car_name, buy_rect):
         if buy_rect.collidepoint(pos) and not self.is_car_purchased(car_name):
             return self.purchase_car(car_name)
+        return False
+    
+    def is_map_purchased(self, map_name):
+        purchased_maps = self.load_purchased_maps()
+        return map_name in purchased_maps
+
+    def check_buy_click2(self, pos, map_name, buy_rect):
+        if buy_rect.collidepoint(pos) and not self.is_map_purchased(map_name):
+            return self.purchase_map(map_name)
         return False
 
 class Roads:
@@ -956,8 +989,11 @@ class ConfigurationMenu(ABC):
         pass         
 
 class MapsMenu(ConfigurationMenu):
-    def __init__(self, x, y):
+    def __init__(self, x, y, score, file_path="purchased_maps.txt"):
         super().__init__(x, y)
+        self.file_path = file_path
+        self.score = score 
+        self.purchased_maps = self.load_purchased_maps()
         
         self.image_map3 = self.load_image("map3_preview.png")
         self.image_map2 = self.load_image("map2_preview.png")
@@ -982,18 +1018,37 @@ class MapsMenu(ConfigurationMenu):
         self.buy_image_rect3 = self.image_champions_field.get_rect(topleft=(x + 1350, y + 870))
         self.buy_image_rect4 = self.image_champions_field.get_rect(topleft=(x + 750, y + 870))
 
+    def load_purchased_maps(self):
+        if not os.path.exists(self.file_path):
+            return set()
+        with open(self.file_path, "r") as file:
+            return set(file.read().splitlines())
+    
+    def save_purchased_maps(self):
+        with open(self.file_path, "w") as file:
+            file.write("\n".join(self.purchased_maps))
+    
+    def purchase_map(self, map_name):
+        if map_name not in self.purchased_maps:
+            self.purchased_maps.add(map_name)
+            self.save_purchased_maps()
 
     def draw(self, screen):
         screen.blit(self.image_map3, self.map3_rect.topleft)
         screen.blit(self.image_map2, self.map2_rect.topleft)
-        screen.blit(self.image_beach_lock, self.beach_rect.topleft)
-        screen.blit(self.image_winter_lock, self.winter_rect.topleft)
-        screen.blit(self.image_summer_lock, self.summer_rect.topleft)
-        screen.blit(self.image_champions_field_lock, self.champions_field_rect.topleft)
-        screen.blit(self.buy_image, self.buy_image_rect.topleft)
-        screen.blit(self.buy_image, self.buy_image_rect2.topleft)
-        screen.blit(self.buy_image, self.buy_image_rect3.topleft)
-        screen.blit(self.buy_image, self.buy_image_rect4.topleft)
+        screen.blit(self.image_beach if 'beach' in self.purchased_maps else self.image_beach_lock, self.beach_rect.topleft)
+        screen.blit(self.image_winter if 'winter' in self.purchased_maps else self.image_winter_lock, self.winter_rect.topleft)
+        screen.blit(self.image_summer if 'summer' in self.purchased_maps else self.image_summer_lock, self.summer_rect.topleft)
+        screen.blit(self.image_champions_field if 'champion_field' in self.purchased_maps else self.image_champions_field_lock, self.champions_field_rect.topleft)        
+
+        if 'beach' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect.topleft)
+        if 'summer' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect2.topleft)
+        if 'champion_field' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect3.topleft)
+        if 'winter' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect4.topleft)
 
         self.draw_text("Select a map:", self.beach_rect.centerx, self.y - 50, screen, self.title_font)
         self.draw_text("Tidal Heatwave", self.map3_rect.centerx, self.map3_rect.top - 30, screen)
@@ -1004,17 +1059,35 @@ class MapsMenu(ConfigurationMenu):
         self.draw_text("Champions Field", self.champions_field_rect.centerx, self.champions_field_rect.top - 30, screen)
 
     def check_click(self, pos):
+
+        if self.buy_image_rect.collidepoint(pos):
+            if self.score.purchase_map("beach"):
+                self.purchased_maps.add("beach")
+                self.save_purchased_maps()
+        elif self.buy_image_rect2.collidepoint(pos):
+            if self.score.purchase_map("summer"):
+                self.purchased_maps.add("summer")
+                self.save_purchased_maps()
+        elif self.buy_image_rect3.collidepoint(pos):
+            if self.score.purchase_map("champion_field"):
+                self.purchased_maps.add("champion_field")
+                self.save_purchased_maps()
+        elif self.buy_image_rect4.collidepoint(pos):
+            if self.score.purchase_map("winter"):
+                self.purchased_maps.add("winter")
+                self.save_purchased_maps()
+
         if self.map3_rect.collidepoint(pos):
             return 'map3'
         elif self.map2_rect.collidepoint(pos):
             return 'map2'
-        elif self.beach_rect.collidepoint(pos):
+        elif self.beach_rect.collidepoint(pos) and "beach" in self.purchased_maps:
             return 'beach'
-        elif self.winter_rect.collidepoint(pos):
+        elif self.winter_rect.collidepoint(pos) and "winter" in self.purchased_maps:
             return 'winter'
-        elif self.summer_rect.collidepoint(pos):
+        elif self.summer_rect.collidepoint(pos) and "summer" in self.purchased_maps:
             return 'summer'
-        elif self.champions_field_rect.collidepoint(pos):
+        elif self.champions_field_rect.collidepoint(pos) and "champions_field" in self.purchased_maps:
             return 'champions_field'
         return None
 
@@ -1037,14 +1110,14 @@ class CarsMenu(ConfigurationMenu):
         
         self.buy_image = self.load_image("3000.png")
         
-        self.car1_rect = self.image_car1.get_rect(topleft=(x, y + 60))
+        self.car1_rect = self.image_car1.get_rect(topleft=(x + 1200, y + 60))
         self.car2_rect = self.image_car2.get_rect(topleft=(x + 600, y + 60))
-        self.car3_rect = self.image_car3.get_rect(topleft=(x + 300, y + 550))
-        self.car4_rect = self.image_car4.get_rect(topleft=(x + 900, y + 550))
-        self.car5_rect = self.image_car5.get_rect(topleft=(x + 1200, y + 60))
-        self.buy_image_rect = self.buy_image.get_rect(topleft=(x + 125, y + 400))
+        self.car3_rect = self.image_car3.get_rect(topleft=(x + 900, y + 550))
+        self.car4_rect = self.image_car4.get_rect(topleft=(x + 300, y + 550))
+        self.car5_rect = self.image_car5.get_rect(topleft=(x, y + 60))
+        self.buy_image_rect = self.buy_image.get_rect(topleft=(x + 1325, y + 400))
         self.buy_image2_rect = self.buy_image.get_rect(topleft=(x + 725, y + 400))
-        self.buy_image3_rect = self.buy_image.get_rect(topleft=(x + 425, y + 890))
+        self.buy_image3_rect = self.buy_image.get_rect(topleft=(x + 1025, y + 890))
     
     def load_purchased_cars(self):
         if not os.path.exists(self.file_path):
@@ -1204,6 +1277,7 @@ class Finish:
                 self.display_circle_number(screen, aspect_ratio)
                 car1.reset()
                 car2.reset()
+                self.menu = Menu(825, 400)
         
             elif car2.cross_finish(car2_collision_point, self.required_side):
                 self.car2_wins += 1
