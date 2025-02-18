@@ -655,7 +655,8 @@ class Score:
         self.map_file_path = map_file_path
         self.buy_price = 3000
         self.buy_price2 = 5000
-
+        self.buy_prices = {"car": 3000, "map": 5000}  # Ціна для машин і карт
+        
         # Визначення можливих позицій монет для кожної карти
         self.coin_positions = {
             "winter": [(515, 286), (630, 580), (219, 521), (179, 904), (605, 1009), 
@@ -725,46 +726,39 @@ class Score:
                 return True
         return False
 
-    def load_purchased_cars(self):
-        if not os.path.exists(self.car_file_path):
+    def load_purchases(self, file_path):
+        """Завантажує куплені авто або карти"""
+        if not os.path.exists(file_path):
             return set()
-        with open(self.car_file_path, "r") as file:
+        with open(file_path, "r") as file:
             return set(file.read().splitlines())
-    
-    def save_purchased_cars(self, purchased_cars):
-        with open(self.car_file_path, "w") as file:
-            file.write("\n".join(purchased_cars))
-    
-    def purchase_car(self, car_name):
-        if self.current_score >= self.buy_price:
-            purchased_cars = self.load_purchased_cars()
-            if car_name not in purchased_cars:
-                purchased_cars.add(car_name)
-                self.current_score -= self.buy_price
-                self.save_score()
-                self.save_purchased_cars(purchased_cars)
-                return True
-        return False
-    
-    def load_purchased_maps(self):
-        if not os.path.exists(self.map_file_path):
-            return set()
-        with open(self.map_file_path, "r") as file:
-            return set(file.read().splitlines())
-    
-    def save_purchased_maps(self, purchased_maps):
-        with open(self.map_file_path, "w") as file:
-            file.write("\n".join(purchased_maps))
-    
-    def purchase_map(self, map_name):
-        if self.current_score >= self.buy_price2:
-            purchased_maps = self.load_purchased_maps()
-            if map_name not in purchased_maps:
-                purchased_maps.add(map_name)
-                self.current_score -= self.buy_price2
-                self.save_score()
-                self.save_purchased_maps(purchased_maps)
-                return True
+
+    def save_purchases(self, file_path, purchases):
+        """Зберігає куплені авто або карти"""
+        with open(file_path, "w") as file:
+            file.write("\n".join(purchases))
+
+    def purchase_item(self, item_name, item_type):
+        """
+        Універсальний метод покупки для машин і карт.
+
+        :param item_name: Назва авто або карти.
+        :param item_type: Тип ("car" або "map").
+        :return: True, якщо покупка вдала, інакше False.
+        """
+        if item_type not in self.buy_prices:
+            return False  # Некоректний тип товару
+
+        file_path = self.car_file_path if item_type == "car" else self.map_file_path
+        purchased_items = self.load_purchases(file_path)
+        price = self.buy_prices[item_type]
+
+        if self.current_score >= price and item_name not in purchased_items:
+            purchased_items.add(item_name)
+            self.current_score -= price
+            self.save_score()
+            self.save_purchases(file_path, purchased_items)
+            return True
         return False
 
     def add_score(self, amount):
@@ -802,23 +796,32 @@ class Score:
         score_text = font.render(f"Score: {self.current_score}", True, (255, 255, 255))
         screen.blit(score_text, (1700, 10))  # Відображення у правому верхньому куті
 
-    def is_car_purchased(self, car_name):
-        purchased_cars = self.load_purchased_cars()
-        return car_name in purchased_cars
+    def is_item_purchased(self, item_name, item_type):
+        """
+        Перевіряє, чи куплений товар (авто або карта).
 
-    def check_buy_click(self, pos, car_name, buy_rect):
-        if buy_rect.collidepoint(pos) and not self.is_car_purchased(car_name):
-            return self.purchase_car(car_name)
-        return False
-    
-    def is_map_purchased(self, map_name):
-        purchased_maps = self.load_purchased_maps()
-        return map_name in purchased_maps
+        :param item_name: Назва авто або карти.
+        :param item_type: Тип ("car" або "map").
+        :return: True, якщо куплено, False інакше.
+        """
+        file_path = self.car_file_path if item_type == "car" else self.map_file_path
+        purchased_items = self.load_purchases(file_path)
+        return item_name in purchased_items
 
-    def check_buy_click2(self, pos, map_name, buy_rect):
-        if buy_rect.collidepoint(pos) and not self.is_map_purchased(map_name):
-            return self.purchase_map(map_name)
+    def check_buy_click(self, pos, item_name, buy_rect, item_type):
+        """
+        Обробляє клік по кнопці покупки (універсальний метод для авто і карт).
+
+        :param pos: Координати кліку.
+        :param item_name: Назва авто або карти.
+        :param buy_rect: Прямокутник кнопки покупки.
+        :param item_type: Тип товару ("car" або "map").
+        :return: True, якщо покупка вдала, інакше False.
+        """
+        if buy_rect.collidepoint(pos) and not self.is_item_purchased(item_name, item_type):
+            return self.purchase_item(item_name, item_type)
         return False
+
 
 class Roads:
     def __init__(self, imagePath, animSpeed):
@@ -1013,10 +1016,10 @@ class MapsMenu(ConfigurationMenu):
         self.winter_rect = self.image_winter.get_rect(topleft=(x + 600, y + 550))
         self.summer_rect = self.image_summer.get_rect(topleft=(x + 1200, y + 90))
         self.champions_field_rect = self.image_champions_field.get_rect(topleft=(x + 1200, y + 550))
-        self.buy_image_rect = self.image_champions_field.get_rect(topleft=(x + 750, y + 410))
-        self.buy_image_rect2 = self.image_champions_field.get_rect(topleft=(x + 1350, y + 410))
-        self.buy_image_rect3 = self.image_champions_field.get_rect(topleft=(x + 1350, y + 870))
-        self.buy_image_rect4 = self.image_champions_field.get_rect(topleft=(x + 750, y + 870))
+        self.buy_image_rect = self.buy_image.get_rect(topleft=(x + 750, y + 410))
+        self.buy_image_rect2 = self.buy_image.get_rect(topleft=(x + 1350, y + 410))
+        self.buy_image_rect3 = self.buy_image.get_rect(topleft=(x + 1350, y + 870))
+        self.buy_image_rect4 = self.buy_image.get_rect(topleft=(x + 750, y + 870))
 
     def load_purchased_maps(self):
         if not os.path.exists(self.file_path):
@@ -1061,19 +1064,19 @@ class MapsMenu(ConfigurationMenu):
     def check_click(self, pos):
 
         if self.buy_image_rect.collidepoint(pos):
-            if self.score.purchase_map("beach"):
+            if self.score.purchase_item("beach", "map"):
                 self.purchased_maps.add("beach")
                 self.save_purchased_maps()
         elif self.buy_image_rect2.collidepoint(pos):
-            if self.score.purchase_map("summer"):
+            if self.score.purchase_item("summer", "map"):
                 self.purchased_maps.add("summer")
                 self.save_purchased_maps()
         elif self.buy_image_rect3.collidepoint(pos):
-            if self.score.purchase_map("champion_field"):
+            if self.score.purchase_item("champion_field", "map"):
                 self.purchased_maps.add("champion_field")
                 self.save_purchased_maps()
         elif self.buy_image_rect4.collidepoint(pos):
-            if self.score.purchase_map("winter"):
+            if self.score.purchase_item("winter", "map"):
                 self.purchased_maps.add("winter")
                 self.save_purchased_maps()
 
@@ -1158,15 +1161,15 @@ class CarsMenu(ConfigurationMenu):
     
     def check_click(self, pos):
         if self.buy_image_rect.collidepoint(pos):
-            if self.score.purchase_car("car1"):
+            if self.score.purchase_item("car1", "car"):
                 self.purchased_cars.add("car1")
                 self.save_purchased_cars()
         elif self.buy_image2_rect.collidepoint(pos):
-            if self.score.purchase_car("car2"):
+            if self.score.purchase_item("car2", "car"):
                 self.purchased_cars.add("car2")
                 self.save_purchased_cars()
         elif self.buy_image3_rect.collidepoint(pos):
-            if self.score.purchase_car("car3"):
+            if self.score.purchase_item("car3", "car"):
                 self.purchased_cars.add("car3")
                 self.save_purchased_cars()
     
