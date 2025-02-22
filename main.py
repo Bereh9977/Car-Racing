@@ -4,6 +4,9 @@ import math
 from utilities import scale_image
 import time
 from abc import ABC, abstractmethod
+import os
+from music import overlay_music_in_loop, stop_music, start_music, next_track, mute_music
+import threading
 
 pygame.init()
 
@@ -28,8 +31,9 @@ class GameSys:
             pygame.image.load('GO.png')
         ]
         self.in_menu = True
-        self.maps_page = MapsMenu(80, 100)
-        self.cars_page = CarsMenu(90, 100)
+        self.score = Score("coin.png")
+        self.maps_page = MapsMenu(80, 100, self.score)
+        self.cars_page = CarsMenu(90, 100, self.score)
         self.modes_page = ModesMenu(100, 100)
         self.choosing_map = False
         self.choosing_car = False
@@ -38,16 +42,27 @@ class GameSys:
         self.mode_choice = '0'
         self.car1 = Cars(400, 997, 0, 0.5, 0, 'car5.png', 'wasd')
         self.car2 = Cars(500, 997, 0, 0.5, 0, 'car5.png', 'arrows')
+        self.IsMusic = False
+        self.pause_font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 36)
+        self.pause_text = self.pause_font.render('Paused', True, (255, 255, 255))
+        self.pause_rect = self.pause_text.get_rect(center=(self.aspect_ratio[0]//2 - 15, self.aspect_ratio[1]//2))
         
     def run(self):
-        self.show_menu()
-        self.show_modes()
-        if (self.running!= False):
-            self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.car1, self.car2, self.bot, self.aspect_ratio, self.mode_choice)
+        newGame = True
+        # if not self.IsMusic:
+        #     start_music()  # Запускаємо музику
 
         # Змінна для регулювання кількості кадрів на секунду
         clock = pygame.time.Clock()
         while self.running:
+            # Перевірка на початок нової гри для відображення меню та зворотнього відліку
+            if newGame:
+                self.in_menu = True
+                self.show_menu()
+                self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.car1, self.car2, self.bot, self.aspect_ratio, self.mode_choice)
+                # Після запуску гри встановлюємо newGame у False, щоб запобігти повторному перезапуску
+                newGame = False
+
             self.roads.draw(self.screen)
             self.finish.draw(self.screen)
             self.obs.draw_obstackles(self.screen, self.map_choice)
@@ -55,34 +70,34 @@ class GameSys:
             if self.mode_choice == 'single':
                 self.score.draw_coins(self.screen)
                 self.car.draw(self.screen)
-                self.car.update_car(self.obs, self.map_choice, self.score)
+                self.car.update_car(self.obs, self.map_choice, self.score, self.IsMusic)
                 self.bot.draw(self.screen)  # Малюємо бота
-                # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
-                self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score)  # self.running = not 
+                # Початок нової гри після закінчення старої
+                newGame = self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score)
                 self.score.draw_score(self.screen)
 
             else:
                 self.car1.draw(self.screen)
-                self.car1.update_car(self.obs, self.map_choice, self.score)
+                self.car1.update_car(self.obs, self.map_choice, self.score, self.IsMusic)
                 self.car2.draw(self.screen)
-                self.car2.update_car(self.obs, self.map_choice, self.score)
-                # Завершення гри, якщо фініш було перетнуто (пройдено всі кола)
-                self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2)  # self.running = not 
-
-            # Малюємо кульки через метод draw_points у Bots
-            # self.bot.draw_points(self.screen)
+                self.car2.update_car(self.obs, self.map_choice, self.score, self.IsMusic)
+                # Початок нової гри після закінчення старої
+                newGame = self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2)
 
             pygame.display.update()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                # elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:  # Клік правою кнопкою миші
-                #     mouse_x, mouse_y = event.pos
-                #     self.bot.points.append((mouse_x, mouse_y))  # Додаємо точку до списку кульок
-                #     # Збираємо координати кульок у одному рядку
-                #     points_str = ", ".join([f"({x}, {y})" for x, y in self.bot.points])
-
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        if not self.handle_pause():  # Викликаємо метод паузи
+                            newGame = True
+                            break  # Якщо handle_pause повернув False, перериваємо цю ітерацію
+                    elif event.key == pygame.K_n:
+                        next_track()
+                    elif event.key == pygame.K_m:
+                        mute_music()
             cars = [self.car, self.car1, self.car2]
 
             for car in cars:
@@ -107,6 +122,7 @@ class GameSys:
                     self.running = False
                     self.in_menu = False
                     pygame.quit()
+                    exit()
                     return
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -114,15 +130,27 @@ class GameSys:
                         self.in_menu = False
                         self.choosing_mode = True
                         self.show_modes()
+                    elif self.menu.options_rect.collidepoint(event.pos):
+                        self.menu.show_options(self.screen, self.running, self.background)  
+                        
+                    elif self.menu.rating_btn_rect.collidepoint(event.pos):
+                        self.menu.show_rating(self.screen, self.running, self.in_menu, self.background)
 
+    def check_for_menu_click(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.menu.menu_back_rect.collidepoint(event.pos) :
+                self.in_menu = True 
+                self.show_menu() 
 
     def show_maps(self):
         while self.choosing_map:
             self.screen.blit(self.background, (0, 0))  
             self.maps_page.draw(self.screen)
+            self.menu.draw_menu_button(self.screen)
             pygame.display.update()
 
             for event in pygame.event.get():
+                self.check_for_menu_click(event)                    
                 if event.type == pygame.QUIT:
                     self.running = False
                     self.choosing_map = False
@@ -148,13 +176,15 @@ class GameSys:
             self.choosing_car = False
             self.choosing_map = True
             self.show_maps()
-        
+            
         while self.choosing_car:
             self.screen.blit(self.background, (0, 0))  
             self.cars_page.draw(self.screen)
+            self.menu.draw_menu_button(self.screen)
             pygame.display.update()
 
             for event in pygame.event.get():
+                self.check_for_menu_click(event)                    
                 if event.type == pygame.QUIT:
                     self.running = False
                     self.choosing_car = False
@@ -248,17 +278,16 @@ class GameSys:
         elif map_choice == 'map2':
             self.finish_location = (128, 400)
             self.finish = Finish('finish.png', *self.finish_location, 0, 0.5, required_circles = 2)
-            self.car = Cars(200, 487, 0, 0.78, 180, self.image, 'wasd')
-            self.bot = Bots(240, 487, 0, 0.68, 180, [(275, 808), (424, 880), (782, 899), (1061, 951), 
-            (1296, 888), (1479, 715), (1518, 516), (1512, 264), (1352, 135), (1090, 126), 
-            (954, 148), (898, 233), (972, 320), (1086, 375), (1217, 491), (1187, 601), (963, 650), 
-            (654, 603), (664, 410), (658, 252), (522, 142), (340, 194), (276, 301), (239, 514)])
+            self.car = Cars(200, 487, 0, 1, 180, self.image, 'wasd')
+            self.bot = Bots(240, 487, 0, 0.88, 180, [(220, 811), (496, 954), (951, 947), (1315, 990), (1495, 761), 
+            (1586, 466), (1458, 152), (1138, 49), (986, 114), (959, 259), (1080, 352), (1199, 408), (1257, 491), (1223, 609), 
+            (982, 662), (680, 620), (648, 463), (708, 316), (647, 201), (493, 141), (299, 178), (258, 247), (195, 423)])
             self.road_contour = pygame.image.load('map2_contour.png')
         else:
             self.finish_location = (55, 278)
             self.finish = Finish('finish.png', *self.finish_location, 0, 0.53, required_circles = 2)
-            self.car = Cars(160, 365, 0, 0.84, 180, self.image, 'wasd')
-            self.bot = Bots(120, 365, 0, 0.7, 180, [(166, 629), (161, 861), (280, 970), 
+            self.car = Cars(160, 365, 0, 1.1, 180, self.image, 'wasd')
+            self.bot = Bots(120, 365, 0, 0.95, 180, [(166, 629), (161, 861), (280, 970), 
             (560, 845), (697, 674), (995, 685), (1225, 561), (1569, 519), (1742, 413), 
             (1665, 242), (1362, 245), (943, 219), (686, 87), (401, 71), (184, 158), (98, 386)])
             self.road_contour = pygame.image.load('map3_contour.png')        
@@ -307,14 +336,88 @@ class GameSys:
 
         self.road_contour_mask = pygame.mask.from_surface(self.road_contour)
 
+    def handle_pause(self):
+        """
+        Обробляє стан паузи гри, дозволяючи змінювати налаштування або вийти в головне меню.
+
+        Ця функція викликається, коли гравець натискає `ESC` під час гри. Вона зупиняє 
+        основний ігровий цикл та відображає меню паузи. У меню можна:
+        - Відкрити налаштування.
+        - Вийти в головне меню.
+        - Продовжити гру, натиснувши `ESC`.
+
+        Повертає:
+            bool: `True`, якщо гравець продовжує гру.
+                `False`, якщо гравець виходить у головне меню або закриває гру.
+        """
+        paused = True     
+        while paused:
+            for event in pygame.event.get():
+                # Обробка кліків миші
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Відкрити меню налаштувань
+                    if self.menu.options_rect.collidepoint(event.pos):
+                        self.menu.show_options(self.screen, self.running, self.background)
+
+                    # Вийти в головне меню
+                    if self.menu.menu_back_rect.collidepoint(event.pos):
+                        return False  
+
+                # Закрити гру
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    quit()
+                    return False  
+
+                # Продовжити гру, якщо натиснуто ESC
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return True  
+
+            # Малюємо екран паузи
+            overlay = pygame.Surface(self.aspect_ratio, pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 128))  # Напівпрозорий чорний фон
+            self.screen.blit(self.background, (0, 0))  
+            self.screen.blit(self.pause_text, self.pause_rect)
+            self.screen.blit(self.menu.imageOptions, self.menu.options_rect.topleft)  
+            self.screen.blit(self.menu.menu_back_bnt, self.menu.menu_back_rect)
+            pygame.display.flip()  
+
+        return True  
+
+
+
 class Menu:
     def __init__(self, x, y):
         self.x = x
         self.y = y
         self.imageStart = self.load_image("start.png", (289, 143))
         self.imageOptions = self.load_image("options.png", (289, 143))
-        self.start_rect = self.imageStart.get_rect(topleft=(x, y))
-        self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 200))
+        self.imageBack = self.load_image("back.png", (288, 103))
+        self.leadorboard = self.load_image("leaderboard.png", (1234, 817))
+        self.rating_btn = self.load_image("rating_btn.png", (287, 141))
+        self.menu_back_bnt = self.load_image("menu_btn.png", (232, 83))
+        self.on_music = self.load_image("on_music.png", (288, 103))
+        self.off_music = self.load_image("off_music.png", (287, 103))
+        self.leadorboard_rect = self.leadorboard.get_rect(topleft=(x - 460, y - 400))
+        self.start_rect = self.imageStart.get_rect(topleft=(x, y - 75))
+        self.options_rect = self.imageOptions.get_rect(topleft=(x, y + 275))
+        self.back_rect = self.imageBack.get_rect(topleft=(x, y + 200))
+        self.back_rect2 = self.imageBack.get_rect(topleft=(x, y + 500))
+        self.rating_btn_rect = self.rating_btn.get_rect(topleft=(x, y + 100))
+        self.menu_back_rect = self.menu_back_bnt.get_rect(topleft=(x - 790, y - 440))
+        self.on_music_rect = self.on_music.get_rect(topleft=(x, y - 200))
+        self.off_music_rect = self.off_music.get_rect(topleft=(x, y - 60))
+        # Параметри повзунка
+        self.slider_x = self.off_music_rect.x
+        self.slider_y = self.off_music_rect.y + self.off_music_rect.height + 60  
+        self.slider_width = 288
+        self.slider_height = 10
+        self.slider_knob_radius = 10
+
+        self.volume = 0.5  # Початкова гучність
+        self.knob_x = self.slider_x + int(self.volume * self.slider_width)
+        self.dragging = False       
 
     def load_image(self, path, size):
         img = pygame.image.load(path)
@@ -323,6 +426,11 @@ class Menu:
     def draw(self, screen):
         screen.blit(self.imageStart, self.start_rect.topleft)
         screen.blit(self.imageOptions, self.options_rect.topleft)
+        screen.blit(self.rating_btn, self.rating_btn_rect.topleft)
+
+    def draw_menu_button(self, screen):
+        """Малює кнопку меню у верхньому лівому кутку."""
+        screen.blit(self.menu_back_bnt, self.menu_back_rect)
 
     def countdown(self, countdown_images, screen, roads, car, car1, car2, bot, aspect_ratio, mode_choice):
         for img in countdown_images:
@@ -342,6 +450,79 @@ class Menu:
 
             pygame.display.update()
             time.sleep(1)      
+
+    def show_options(self, screen, running, background):
+        options_active = True  
+        
+        while options_active:
+            screen.fill((0, 0, 0))
+            screen.blit(background, (0, 0))
+            screen.blit(self.imageBack, self.back_rect)
+            screen.blit(self.on_music, self.on_music_rect)
+            screen.blit(self.off_music, self.off_music_rect)
+
+            # Малюємо повзунок
+            pygame.draw.rect(screen, (200, 200, 200), (self.slider_x, self.slider_y, self.slider_width, self.slider_height))
+            pygame.draw.circle(screen, (59, 59, 59), (self.knob_x, self.slider_y + self.slider_height // 2), self.slider_knob_radius)
+
+            pygame.display.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    options_active = False 
+                    pygame.quit()
+                    exit()
+                    return
+
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        if self.on_music_rect.collidepoint(event.pos):
+                            start_music()
+                        if self.off_music_rect.collidepoint(event.pos):
+                            stop_music()
+                        if self.back_rect.collidepoint(event.pos):
+                            options_active = False
+                            return
+                        # Перевірка, чи натиснуто на повзунок
+                        if abs(event.pos[0] - self.knob_x) < self.slider_knob_radius * 2 and \
+                           self.slider_y - self.slider_knob_radius < event.pos[1] < self.slider_y + self.slider_knob_radius:
+                            self.dragging = True
+
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1:
+                        self.dragging = False
+
+                elif event.type == pygame.MOUSEMOTION:
+                    if self.dragging:
+                        self.knob_x = max(self.slider_x, min(event.pos[0], self.slider_x + self.slider_width))
+                        self.volume = (self.knob_x - self.slider_x) / self.slider_width
+                        pygame.mixer.music.set_volume(self.volume)  # Оновлення гучності
+
+    
+    def show_rating(self, screen, running, in_menu, background):
+        rating_active = True  
+        while rating_active:
+            screen.fill((0, 0, 0))
+            screen.blit(background, (0, 0))
+            screen.blit(self.imageBack, self.back_rect2)
+            screen.blit(self.leadorboard, self.leadorboard_rect)
+
+            pygame.display.update()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    rating_active = False 
+                    pygame.quit()
+                    exit()
+                    return
+
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.back_rect2.collidepoint(event.pos):
+                        options_active = True
+                        in_menu = True
+                        return
     
 class Background:
     def __init__(self, imagePath, animSpeed):
@@ -545,10 +726,12 @@ class Cars:
         self.speed = 0.01
 
     
-    def obstakles_feaches(self, obs, map_choice):
+    def obstakles_feaches(self, obs, map_choice, IsMusic):
         if obs.check_collision_obstackles(self.rect, map_choice):  # Якщо машина торкається об'єкта
             if map_choice == "winter":
                 self.frozen = True
+                if IsMusic == False:
+                    overlay_music_in_loop("D:/CarRacing/soundeffects/ice_sound.mp3")
                 self.freeze_time = time.time()
                 self.show_ice = True  # Показати лід
                 self.ice_time = pygame.time.get_ticks()  # Час початку накладання льоду
@@ -566,7 +749,7 @@ class Cars:
                 else:
                     self.angle += self.sand_turning * 0.5  # Плавний поворот (0.5 градуса за кадр)
     
-    def update_car(self, obs, map_choice, score):
+    def update_car(self, obs, map_choice, score, IsMusic):
         self.check_freeze()  # Перевіряємо, чи закінчився час заморозки
         self.check_spin()  # Перевіряємо, чи закінчилося обертання
 
@@ -579,7 +762,7 @@ class Cars:
         
         # Перевірка на зіштовхнення з монетками
         score.check_collision(self.rect)
-        self.obstakles_feaches(obs, map_choice)      
+        self.obstakles_feaches(obs, map_choice, IsMusic)      
         drive_direction = self.get_drive_direction()
         rotation_direction = self.get_rotation_direction(drive_direction)
         self.rotation_direction = rotation_direction
@@ -609,7 +792,7 @@ class Score:
     збереження та завантаження очок із файлу, а також їхнє відображення на екрані.
     """
 
-    def __init__(self, image_path, map_choice="none", file_path="score.txt"):
+    def __init__(self, image_path, map_choice="none", file_path="score.txt", car_file_path="purchased_cars.txt", map_file_path="purchased_maps.txt"):
         """
         Ініціалізує об'єкт очок та монет.
 
@@ -620,7 +803,14 @@ class Score:
         """
         self.image = scale_image(pygame.image.load(image_path), 0.07)
         self.file_path = file_path
-
+        self.car_purchased = False  # Додаємо змінну, яка відстежує покупку
+        self.map_purchased = False  
+        self.car_file_path = car_file_path
+        self.map_file_path = map_file_path
+        self.buy_price = 3000
+        self.buy_price2 = 5000
+        self.buy_prices = {"car": 3000, "map": 5000}  # Ціна для машин і карт
+        
         # Визначення можливих позицій монет для кожної карти
         self.coin_positions = {
             "winter": [(515, 286), (630, 580), (219, 521), (179, 904), (605, 1009), 
@@ -644,6 +834,10 @@ class Score:
 
         # Створення об'єктів Rect для перевірки зіткнень
         self.coin_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.coins]
+
+        self.last_score = -1
+        self.font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 36)
+        self.score_pos = (1700, 10)  # Збереження позиції
 
         # Завантаження очок із файлу
         self.load_score()
@@ -690,6 +884,41 @@ class Score:
                 return True
         return False
 
+    def load_purchases(self, file_path):
+        """Завантажує куплені авто або карти"""
+        if not os.path.exists(file_path):
+            return set()
+        with open(file_path, "r") as file:
+            return set(file.read().splitlines())
+
+    def save_purchases(self, file_path, purchases):
+        """Зберігає куплені авто або карти"""
+        with open(file_path, "w") as file:
+            file.write("\n".join(purchases))
+
+    def purchase_item(self, item_name, item_type):
+        """
+        Універсальний метод покупки для машин і карт.
+
+        :param item_name: Назва авто або карти.
+        :param item_type: Тип ("car" або "map").
+        :return: True, якщо покупка вдала, інакше False.
+        """
+        if item_type not in self.buy_prices:
+            return False  # Некоректний тип товару
+
+        file_path = self.car_file_path if item_type == "car" else self.map_file_path
+        purchased_items = self.load_purchases(file_path)
+        price = self.buy_prices[item_type]
+
+        if self.current_score >= price and item_name not in purchased_items:
+            purchased_items.add(item_name)
+            self.current_score -= price
+            self.save_score()
+            self.save_purchases(file_path, purchased_items)
+            return True
+        return False
+
     def add_score(self, amount):
         """
         Додає вказану кількість очок та зберігає оновлений рахунок.
@@ -721,9 +950,37 @@ class Score:
 
         :param screen: Поверхня Pygame, на якій відображається гра.
         """
-        font = pygame.font.Font("D:/CarRacing/AveriaSansLibre-Bold.ttf", 36)
-        score_text = font.render(f"Score: {self.current_score}", True, (255, 255, 255))
-        screen.blit(score_text, (1700, 10))  # Відображення у правому верхньому куті
+        if self.current_score != self.last_score:
+             self.last_score = self.current_score
+             self.score_text = self.font.render(f"Score: {self.current_score}", True, (255, 255, 255))
+
+        screen.blit(self.score_text, self.score_pos)
+
+    def is_item_purchased(self, item_name, item_type):
+        """
+        Перевіряє, чи куплений товар (авто або карта).
+
+        :param item_name: Назва авто або карти.
+        :param item_type: Тип ("car" або "map").
+        :return: True, якщо куплено, False інакше.
+        """
+        file_path = self.car_file_path if item_type == "car" else self.map_file_path
+        purchased_items = self.load_purchases(file_path)
+        return item_name in purchased_items
+
+    def check_buy_click(self, pos, item_name, buy_rect, item_type):
+        """
+        Обробляє клік по кнопці покупки (універсальний метод для авто і карт).
+
+        :param pos: Координати кліку.
+        :param item_name: Назва авто або карти.
+        :param buy_rect: Прямокутник кнопки покупки.
+        :param item_type: Тип товару ("car" або "map").
+        :return: True, якщо покупка вдала, інакше False.
+        """
+        if buy_rect.collidepoint(pos) and not self.is_item_purchased(item_name, item_type):
+            return self.purchase_item(item_name, item_type)
+        return False
 
 
 class Roads:
@@ -745,16 +1002,16 @@ class Obstacles:
                            (1395, 434), (1269, 657), (1679, 746), (628, 244), 
                            (248, 1024), (1137, 708), (1821, 492), (360, 302)]  # Координати сніжинок
         self.banana = [(1069, 555), (850, 1019), (1262, 522), (1632, 599),
-                        (1586, 854), (552, 851), (343, 919), (356, 659),
-                        (216, 481), (275, 505), (661, 887), (1610, 913)]
-        self.banana2 = [(50, 954), (79, 737), (136, 497), (424, 50), 
-                        (781, 165), (1240, 315), (1379, 173), (1547, 262), 
-                        (1684, 456), (1345, 606), (1043, 563), (844, 665)]
+                        (1586, 854), (552, 851), (343, 919), (356, 690),
+                        (216, 481), (285, 505), (661, 887), (1610, 925)]
+        self.banana2 = [(100, 900), (79, 737), (136, 497), (424, 50), 
+                        (781, 165), (1240, 280), (1379, 173), (1547, 262), 
+                        (1684, 456), (1345, 580), (1043, 563), (844, 665)]
         self.sand = [(545, 805), (1329, 791), (1282, 469), (533, 503),
                      (308, 196), (716, 651), (244, 715), (987, 193),
                      (923, 610), (457, 867), (1256, 536), (187, 340)]
         self.snowflakes_rand = random.sample(self.snowflakes, 4)
-        self.banana_rand = random.sample(self.banana, 4)
+        self.banana_rand = random.sample(self.banana, 12)
         self.banana2_rand = random.sample(self.banana2, 4)
         self.sand_rand = random.sample(self.sand, 4)
         self.snowflake_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.snowflakes_rand]
@@ -895,8 +1152,11 @@ class ConfigurationMenu(ABC):
         pass         
 
 class MapsMenu(ConfigurationMenu):
-    def __init__(self, x, y):
+    def __init__(self, x, y, score, file_path="purchased_maps.txt"):
         super().__init__(x, y)
+        self.file_path = file_path
+        self.score = score 
+        self.purchased_maps = self.load_purchased_maps()
         
         self.image_map3 = self.load_image("map3_preview.png")
         self.image_map2 = self.load_image("map2_preview.png")
@@ -904,48 +1164,103 @@ class MapsMenu(ConfigurationMenu):
         self.image_winter = self.load_image("winter_preview.png")
         self.image_summer = self.load_image("summer_preview.png")
         self.image_champions_field = self.load_image("champions_field_preview.png")
+        self.image_beach_lock = self.load_image("beach_lock.png")
+        self.image_winter_lock = self.load_image("winter_lock.png")
+        self.image_summer_lock = self.load_image("summer_lock.png")
+        self.image_champions_field_lock = self.load_image("champions_field_lock.png")
+        self.buy_image = self.load_image("5000.png")
         
-        self.map3_rect = self.image_map3.get_rect(topleft=(x, y + 130))
+        self.map3_rect = self.image_map3.get_rect(topleft=(x, y + 90))
         self.map2_rect = self.image_map2.get_rect(topleft=(x, y + 550))
-        self.beach_rect = self.image_beach.get_rect(topleft=(x + 600, y + 130))
+        self.beach_rect = self.image_beach.get_rect(topleft=(x + 600, y + 90))
         self.winter_rect = self.image_winter.get_rect(topleft=(x + 600, y + 550))
-        self.summer_rect = self.image_summer.get_rect(topleft=(x + 1200, y + 130))
+        self.summer_rect = self.image_summer.get_rect(topleft=(x + 1200, y + 90))
         self.champions_field_rect = self.image_champions_field.get_rect(topleft=(x + 1200, y + 550))
+        self.buy_image_rect = self.buy_image.get_rect(topleft=(x + 750, y + 410))
+        self.buy_image_rect2 = self.buy_image.get_rect(topleft=(x + 1350, y + 410))
+        self.buy_image_rect3 = self.buy_image.get_rect(topleft=(x + 1350, y + 870))
+        self.buy_image_rect4 = self.buy_image.get_rect(topleft=(x + 750, y + 870))
+
+    def load_purchased_maps(self):
+        if not os.path.exists(self.file_path):
+            return set()
+        with open(self.file_path, "r") as file:
+            return set(file.read().splitlines())
+    
+    def save_purchased_maps(self):
+        with open(self.file_path, "w") as file:
+            file.write("\n".join(self.purchased_maps))
+    
+    def purchase_map(self, map_name):
+        if map_name not in self.purchased_maps:
+            self.purchased_maps.add(map_name)
+            self.save_purchased_maps()
 
     def draw(self, screen):
         screen.blit(self.image_map3, self.map3_rect.topleft)
         screen.blit(self.image_map2, self.map2_rect.topleft)
-        screen.blit(self.image_beach, self.beach_rect.topleft)
-        screen.blit(self.image_winter, self.winter_rect.topleft)
-        screen.blit(self.image_summer, self.summer_rect.topleft)
-        screen.blit(self.image_champions_field, self.champions_field_rect.topleft)
+        screen.blit(self.image_beach if 'beach' in self.purchased_maps else self.image_beach_lock, self.beach_rect.topleft)
+        screen.blit(self.image_winter if 'winter' in self.purchased_maps else self.image_winter_lock, self.winter_rect.topleft)
+        screen.blit(self.image_summer if 'summer' in self.purchased_maps else self.image_summer_lock, self.summer_rect.topleft)
+        screen.blit(self.image_champions_field if 'champions_field' in self.purchased_maps else self.image_champions_field_lock, self.champions_field_rect.topleft)        
 
-        self.draw_text("Select a map:", self.beach_rect.centerx, self.y, screen, self.title_font)
+        if 'beach' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect.topleft)
+        if 'summer' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect2.topleft)
+        if 'champions_field' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect3.topleft)
+        if 'winter' not in self.purchased_maps:
+            screen.blit(self.buy_image, self.buy_image_rect4.topleft)
+
+        self.draw_text("Select a map:", self.beach_rect.centerx, self.y - 50, screen, self.title_font)
         self.draw_text("Tidal Heatwave", self.map3_rect.centerx, self.map3_rect.top - 30, screen)
         self.draw_text("Meadow Rush", self.map2_rect.centerx, self.map2_rect.top - 30, screen)
         self.draw_text("Palm Paradise", self.beach_rect.centerx, self.beach_rect.top - 30, screen)
         self.draw_text("Frozen Tides", self.winter_rect.centerx, self.winter_rect.top - 30, screen)
         self.draw_text("Evergreen Escape", self.summer_rect.centerx, self.summer_rect.top - 30, screen)
         self.draw_text("Champions Field", self.champions_field_rect.centerx, self.champions_field_rect.top - 30, screen)
+        self.score.draw_score(screen)
 
     def check_click(self, pos):
+
+        if self.buy_image_rect.collidepoint(pos):
+            if self.score.purchase_item("beach", "map"):
+                self.purchased_maps.add("beach")
+                self.save_purchased_maps()
+        elif self.buy_image_rect2.collidepoint(pos):
+            if self.score.purchase_item("summer", "map"):
+                self.purchased_maps.add("summer")
+                self.save_purchased_maps()
+        elif self.buy_image_rect3.collidepoint(pos):
+            if self.score.purchase_item("champions_field", "map"):
+                self.purchased_maps.add("champions_field")
+                self.save_purchased_maps()
+        elif self.buy_image_rect4.collidepoint(pos):
+            if self.score.purchase_item("winter", "map"):
+                self.purchased_maps.add("winter")
+                self.save_purchased_maps()
+
         if self.map3_rect.collidepoint(pos):
             return 'map3'
         elif self.map2_rect.collidepoint(pos):
             return 'map2'
-        elif self.beach_rect.collidepoint(pos):
+        elif self.beach_rect.collidepoint(pos) and "beach" in self.purchased_maps:
             return 'beach'
-        elif self.winter_rect.collidepoint(pos):
+        elif self.winter_rect.collidepoint(pos) and "winter" in self.purchased_maps:
             return 'winter'
-        elif self.summer_rect.collidepoint(pos):
+        elif self.summer_rect.collidepoint(pos) and "summer" in self.purchased_maps:
             return 'summer'
-        elif self.champions_field_rect.collidepoint(pos):
+        elif self.champions_field_rect.collidepoint(pos) and "champions_field" in self.purchased_maps:
             return 'champions_field'
         return None
 
 class CarsMenu(ConfigurationMenu):
-    def __init__(self, x, y):
+    def __init__(self, x, y, score, file_path="purchased_cars.txt"):
         super().__init__(x, y)
+        self.file_path = file_path
+        self.score = score 
+        self.purchased_cars = self.load_purchased_cars()
         
         self.image_car1 = self.load_image("car1_preview.png")
         self.image_car2 = self.load_image("car2_preview.png")
@@ -953,37 +1268,84 @@ class CarsMenu(ConfigurationMenu):
         self.image_car4 = self.load_image("car4_preview.png")
         self.image_car5 = self.load_image("car5_preview.png")
         
-        self.car1_rect = self.image_car1.get_rect(topleft=(x, y + 100))
-        self.car2_rect = self.image_car2.get_rect(topleft=(x + 600, y + 100))
-        self.car3_rect = self.image_car3.get_rect(topleft=(x + 300, y + 550))
-        self.car4_rect = self.image_car4.get_rect(topleft=(x + 900, y + 550))
-        self.car5_rect = self.image_car5.get_rect(topleft=(x + 1200, y + 100))
-
+        self.image_car1_lock = self.load_image("car1_lock.png")
+        self.image_car2_lock = self.load_image("car2_lock.png")
+        self.image_car3_lock = self.load_image("car3_lock.png")
+        
+        self.buy_image = self.load_image("3000.png")
+        
+        self.car1_rect = self.image_car1.get_rect(topleft=(x + 1200, y + 60))
+        self.car2_rect = self.image_car2.get_rect(topleft=(x + 600, y + 60))
+        self.car3_rect = self.image_car3.get_rect(topleft=(x + 900, y + 550))
+        self.car4_rect = self.image_car4.get_rect(topleft=(x + 300, y + 550))
+        self.car5_rect = self.image_car5.get_rect(topleft=(x, y + 60))
+        self.buy_image_rect = self.buy_image.get_rect(topleft=(x + 1325, y + 400))
+        self.buy_image2_rect = self.buy_image.get_rect(topleft=(x + 725, y + 400))
+        self.buy_image3_rect = self.buy_image.get_rect(topleft=(x + 1025, y + 890))
+    
+    def load_purchased_cars(self):
+        if not os.path.exists(self.file_path):
+            return set()
+        with open(self.file_path, "r") as file:
+            return set(file.read().splitlines())
+    
+    def save_purchased_cars(self):
+        with open(self.file_path, "w") as file:
+            file.write("\n".join(self.purchased_cars))
+    
+    def purchase_car(self, car_name):
+        if car_name not in self.purchased_cars:
+            self.purchased_cars.add(car_name)
+            self.save_purchased_cars()
+    
     def draw(self, screen):
-        screen.blit(self.image_car1, self.car1_rect.topleft)
-        screen.blit(self.image_car2, self.car2_rect.topleft)
-        screen.blit(self.image_car3, self.car3_rect.topleft)
+        screen.blit(self.image_car1 if 'car1' in self.purchased_cars else self.image_car1_lock, self.car1_rect.topleft)
+        screen.blit(self.image_car2 if 'car2' in self.purchased_cars else self.image_car2_lock, self.car2_rect.topleft)
+        screen.blit(self.image_car3 if 'car3' in self.purchased_cars else self.image_car3_lock, self.car3_rect.topleft)
         screen.blit(self.image_car4, self.car4_rect.topleft)
         screen.blit(self.image_car5, self.car5_rect.topleft)
-
-        self.draw_text("Select a car:", self.car2_rect.centerx, self.y - 10, screen, self.title_font)
+        
+        # Малюємо кнопки "Купити", якщо машина ще не куплена
+        if 'car1' not in self.purchased_cars:
+            screen.blit(self.buy_image, self.buy_image_rect.topleft)
+        if 'car2' not in self.purchased_cars:
+            screen.blit(self.buy_image, self.buy_image2_rect.topleft)
+        if 'car3' not in self.purchased_cars:
+            screen.blit(self.buy_image, self.buy_image3_rect.topleft)
+        
+        self.draw_text("Select a car:", self.car2_rect.centerx, self.y - 50, screen, self.title_font)
         self.draw_text("Ferrari 458 Challenge", self.car1_rect.centerx, self.car1_rect.top - 30, screen)
         self.draw_text("Mclaren P1 Sports", self.car2_rect.centerx, self.car2_rect.top - 30, screen)
         self.draw_text("Ford Mustang Shelby", self.car3_rect.centerx, self.car3_rect.top - 30, screen)
         self.draw_text("Subaru Impreza WRX STI", self.car4_rect.centerx, self.car4_rect.top - 30, screen)
         self.draw_text("Dodge Viper GTS", self.car5_rect.centerx, self.car5_rect.top - 30, screen)
-
+        self.score.draw_score(screen)
+    
     def check_click(self, pos):
-        if self.car1_rect.collidepoint(pos):
-            return 'car1'
-        elif self.car2_rect.collidepoint(pos):
-            return 'car2'
-        elif self.car3_rect.collidepoint(pos):
-            return 'car3'
+        if self.buy_image_rect.collidepoint(pos):
+            if self.score.purchase_item("car1", "car"):
+                self.purchased_cars.add("car1")
+                self.save_purchased_cars()
+        elif self.buy_image2_rect.collidepoint(pos):
+            if self.score.purchase_item("car2", "car"):
+                self.purchased_cars.add("car2")
+                self.save_purchased_cars()
+        elif self.buy_image3_rect.collidepoint(pos):
+            if self.score.purchase_item("car3", "car"):
+                self.purchased_cars.add("car3")
+                self.save_purchased_cars()
+    
+        # Вибір тільки куплених машин
+        if self.car1_rect.collidepoint(pos) and "car1" in self.purchased_cars:
+            return "car1"
+        elif self.car2_rect.collidepoint(pos) and "car2" in self.purchased_cars:
+            return "car2"
+        elif self.car3_rect.collidepoint(pos) and "car3" in self.purchased_cars:
+            return "car3"
         elif self.car4_rect.collidepoint(pos):
-            return 'car4'
+            return "car4"
         elif self.car5_rect.collidepoint(pos):
-            return 'car5'
+            return "car5"
         return None
     
 class ModesMenu(ConfigurationMenu):
@@ -993,7 +1355,7 @@ class ModesMenu(ConfigurationMenu):
         self.image_single = self.load_image("single.png")        
         self.image_doubles = self.load_image("doubles.png")
 
-        self.single_rect = self.image_single.get_rect(topleft=(x - 70, y + 250))
+        self.single_rect = self.image_single.get_rect(topleft=(x - 40, y + 250))
         self.doubles_rect = self.image_doubles.get_rect(topleft=(x + 890, y + 250))
 
     def draw(self, screen):
@@ -1080,6 +1442,7 @@ class Finish:
                 self.display_circle_number(screen, aspect_ratio)
                 car1.reset()
                 car2.reset()
+                self.menu = Menu(825, 400)
         
             elif car2.cross_finish(car2_collision_point, self.required_side):
                 self.car2_wins += 1
