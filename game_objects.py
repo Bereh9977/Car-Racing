@@ -337,9 +337,8 @@ class Bots(Cars):
         y_diff = target_y - self.y
 
         if y_diff == 0:
-            desired_radian_angle = math.pi / 2
-        else:
-            desired_radian_angle = math.atan(x_diff / y_diff)
+            y_diff = 0.01
+        desired_radian_angle = math.atan(x_diff / y_diff)
 
         if target_y > self.y:
             desired_radian_angle += math.pi
@@ -740,19 +739,21 @@ class Finish:
         car1_collision_point = car1.collide(self.mask, self.x, self.y)
         car2_collision_point = car2.collide(self.mask, self.x, self.y)
         if car1.cross_finish(car1_collision_point, self.required_side):
-            overlay_music_in_loop("soundeffects/car1_win_pt1.mp3")
+            if self.car1_wins == 0:
+                overlay_music_in_loop("soundeffects/car1_win_pt1.mp3")
             self.car1_wins += 1
             self.display_circle_number(screen, aspect_ratio)
             car1.reset()
             car2.reset()
-            time.sleep(4)
+            time.sleep(3)
         elif car2.cross_finish(car2_collision_point, self.required_side):
-            overlay_music_in_loop("soundeffects/car2_win_pt1.mp3")
+            if self.car2_wins == 0:
+                overlay_music_in_loop("soundeffects/car2_win_pt1.mp3")
             self.car2_wins += 1
             self.display_circle_number(screen, aspect_ratio)
             car1.reset()
             car2.reset()
-            time.sleep(4)
+            time.sleep(3)
         return False
 
     def credit_prize(self, score, amount):
@@ -794,4 +795,4 @@ class Finish:
         screen.blit(text, text_rect)
         pygame.display.update()
         overlay_music_in_loop(musicPath)
-        time.sleep(5)
+        time.sleep(6)

@@ -330,7 +330,7 @@ class GameSys:
             self.car2 = Cars(1755, 925, 0, 0.5, 52, 'img/car2.png', 'arrows')
         elif map_choice == 'beach':
             self.finish_location = (1488, 993)
-            self.finish = Finish('finish.png', *self.finish_location, 0, 0.308)
+            self.finish = Finish('img/finish.png', *self.finish_location, 0, 0.308)
             self.car1 = Cars(95, 990, 0, 0.75, 270, 'img/car1.png', 'wasd')
             self.car2 = Cars(95, 950, 0, 0.75, 270, 'img/car2.png', 'arrows')
         elif map_choice == 'champions_field':
@@ -368,7 +368,7 @@ class GameSys:
             for event in pygame.event.get():
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.menu.options_rect.collidepoint(event.pos):
-                        self.menu.show_options(self.screen, self.running, self.background)  # Відкриття налаштувань
+                        self.menu.show_options(self.screen, self.background)  # Відкриття налаштувань
                     if self.menu.menu_back_rect.collidepoint(event.pos):
                         return False  # Вихід у головне меню
                 if event.type == pygame.QUIT:
