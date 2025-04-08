@@ -1,7 +1,9 @@
 import sys
 import os
 import pytest
-from unittest.mock import patch
+import itertools
+from unittest.mock import patch, call
+import threading
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import music 
 
@@ -52,3 +54,29 @@ def test_next_track_does_nothing_if_music_paused(mock_music):
     mock_music.stop.assert_not_called()
     mock_music.load.assert_not_called()
     mock_music.play.assert_not_called()
+
+@patch("pygame.time.delay")
+@patch("pygame.mixer.music")
+@patch("music.upload_soundtracks", return_value=["track1.mp3", "track2.mp3"])
+def test_overlay_music_in_loop_infinity(mock_upload, mock_music, mock_delay):
+    # Підготовка
+    music.current_track_index = 0
+    music.music_playing.set()
+
+    # Імітація завершення програвання двох треків в циклі
+    mock_music.get_busy.side_effect = itertools.cycle([True, False])
+
+    def stop_music_after_short_time():
+        music.music_playing.clear() 
+
+    stop_thread = threading.Timer(0.2, stop_music_after_short_time)
+    stop_thread.start()
+
+    thread = threading.Thread(target=music.overlay_music_in_loop_infinity)
+    thread.start()
+    thread.join(timeout=2)
+
+    expected_calls = [call("track1.mp3"), call("track2.mp3")]
+
+    # Перевіряємо, що принаймні один цикл був виконаний з потрібними треками
+    mock_music.load.assert_has_calls(expected_calls, any_order=False)

@@ -1,25 +1,46 @@
 import unittest
-from unittest.mock import Mock, patch
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+import pygame
+from unittest.mock import Mock
 from game_objects import Cars
 
+class TestCarDraw(unittest.TestCase):
+    def setUp(self):
+        pygame.init()
+        self.screen = Mock()
 
-class TestCarsDraw(unittest.TestCase):
-    def test_draw_calls_pygame_functions(self):
-        car = Cars(100, 150, (255, 0, 0), "img/car.png", 50, 70)
+        # Створюємо фейкове зображення і зберігаємо його
+        self.temp_image = pygame.Surface((50, 50))
+        pygame.image.save(self.temp_image, "temp_car.png")
 
-        mock_screen = Mock()
+        self.car = Cars(
+            x=100,
+            y=100,
+            speed=0,
+            max_speed=10,
+            angle=0,
+            current_image="temp_car.png",
+            controls={"up": pygame.K_w, "down": pygame.K_s, "left": pygame.K_a, "right": pygame.K_d}
+        )
 
-        with patch('game_objects.pygame.draw.rect') as mock_draw_rect:
-            car.draw(mock_screen)
+    def test_draw_without_ice(self):
+        self.car.show_ice = False
+        self.car.draw(self.screen)
+        self.assertTrue(self.screen.blit.called)
 
-            mock_draw_rect.assert_called_once_with(mock_screen, car.color, car.rect)
+    def test_draw_with_ice(self):
+        self.car.show_ice = True
+        self.car.ice_image = pygame.Surface((50, 50))
+        self.car.ice_time = pygame.time.get_ticks() - 500 
+        self.car.draw(self.screen)
+        self.assertTrue(self.screen.blit.called)
+        self.assertTrue(self.car.show_ice)
 
-            mock_screen.blit.assert_called_once_with(car.image, (car.x, car.y))
-
+    def test_draw_ice_timeout(self):
+        self.car.show_ice = True
+        self.car.ice_image = pygame.Surface((50, 50))
+        self.car.ice_time = pygame.time.get_ticks() - 1500  
+        self.car.draw(self.screen)
+        self.assertFalse(self.car.show_ice)
 
 if __name__ == '__main__':
     unittest.main()
