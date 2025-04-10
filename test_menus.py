@@ -40,63 +40,83 @@ def test_draw_no_cars_purchased(mock_screen, mock_score):
 
 # BEREH9977 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @pytest.fixture
-def mock_pygame(monkeypatch, mocker):
+def menu_instance(mocker):
     mock_img = mocker.Mock()
-    mock_img.get_rect.return_value = pygame.Rect(0, 0, 100, 50)
-    mock_img.convert_alpha.return_value = mock_img
+    mock_rect = mocker.Mock()
+    mock_rect.topleft = (100, 240)  # Імітуємо topleft для off_music_rect
+    mock_rect.x = 100
+    mock_rect.y = 240
+    mock_rect.width = 287
+    mock_rect.height = 103
+    mock_img.get_rect.return_value = mock_rect
     mocker.patch("pygame.image.load", return_value=mock_img)
-
     mocker.patch("pygame.transform.scale", side_effect=lambda img, size: img)
-    mocker.patch("pygame.font.Font", return_value=mocker.Mock(render=lambda *args, **kwargs: mock_img))
-    mocker.patch("pygame.draw.rect")
-    mocker.patch("pygame.draw.circle")
-    mocker.patch("pygame.display.update")
-
-    # Мокаємо мікшер
-    mocker.patch("pygame.mixer.music.set_volume")
-
-    # Сторонні функції
-    monkeypatch.setattr("menus.overlay_music_in_loop", lambda sound: None)
-    monkeypatch.setattr("menus.start_music", lambda: None)
-    monkeypatch.setattr("menus.stop_music", lambda: None)
+    mocker.patch.object(Menu, "load_image", return_value=mock_img)
+    menu = Menu(x=100, y=100)
+    # Явно встановлюємо значення для тестування
+    menu.slider_x = 100
+    menu.slider_width = 288
+    menu.knob_x = 244  # Початкове значення не впливає, але для консистентності
+    return menu
 
 @pytest.fixture
 def mock_screen(mocker):
+    """Фікстура для замокування екрану."""
     screen = mocker.Mock()
     screen.blit = mocker.Mock()
     screen.fill = mocker.Mock()
     return screen
 
-def test_show_options_back_button(monkeypatch, mocker, mock_screen, mock_pygame):
-    menu = Menu(x=100, y=100)
+@pytest.mark.parametrize(
+    "mouse_x, expected_knob_x, expected_volume",
+    [
+        (100, 100, 0.0),  # Крайній лівий край повзунка
+        (388, 388, 1.0),  # Крайній правий край повзунка
+        (244, 244, 0.5),  # Середина повзунка
+        (50, 100, 0.0),   # Позиція лівіше за повзунок (обмежується min)
+        (400, 388, 1.0),  # Позиція правіше за повзунок (обмежується max)
+    ],
+)
+def test_slider_position(menu_instance, monkeypatch, mock_screen, mocker, mouse_x, expected_knob_x, expected_volume):
+    """
+    Тестує позицію повзунка гучності та відповідне значення гучності при різних позиціях миші.
     
-    # Заміна моків на реальні значення
-    menu.back_rect = pygame.Rect(0, 0, 100, 100)
-    menu.imageBack = pygame.Surface((100, 100))  # <- це ключове
-    menu.menu_back_bnt = pygame.Surface((100, 50))  # якщо використовується
-    menu.imageOptions = pygame.Surface((100, 50))  # якщо використовується
-
-    mock_event_quit = pygame.event.Event(pygame.MOUSEBUTTONDOWN, {'button': 1, 'pos': (10, 10)})
-    mock_event_up = pygame.event.Event(pygame.MOUSEBUTTONUP, {'button': 1})
-    monkeypatch.setattr("pygame.event.get", lambda: [mock_event_quit, mock_event_up])
-
-    menu.show_options(mock_screen, background=pygame.Surface((100, 100)))  # реальний background
-
-    mock_screen.blit.assert_any_call(menu.imageBack, menu.back_rect)
-
-@pytest.fixture
-def mock_pygame(mocker):
-    mock_img = mocker.Mock()
-    mock_img.get_rect.return_value = pygame.Rect(0, 0, 100, 50)
-    mock_img.convert_alpha.return_value = mock_img
-    mocker.patch("pygame.image.load", return_value=mock_img)
-    mocker.patch("pygame.transform.scale", side_effect=lambda img, size: img)
-    mocker.patch("pygame.font.Font", return_value=mocker.Mock(render=lambda *args, **kwargs: mock_img))
+    :param mouse_x: Координата X миші.
+    :param expected_knob_x: Очікувана позиція повзунка.
+    :param expected_volume: Очікуване значення гучності (0.0 - 1.0).
+    """
+    # Замокування методів Pygame
+    mock_rect = mocker.Mock()
+    mock_rect.topleft = (835, 200)
+    mock_rect.x = 835
+    mock_rect.y = 200
+    mock_text = mocker.Mock()
+    mock_text.get_rect.return_value = mock_rect
+    mock_font = mocker.Mock()
+    mock_font.render.return_value = mock_text
+    mocker.patch("pygame.font.Font", return_value=mock_font)
     mocker.patch("pygame.draw.rect")
     mocker.patch("pygame.draw.circle")
     mocker.patch("pygame.display.update")
     mocker.patch("pygame.mixer.music.set_volume")
 
+    # Ініціалізуємо повзунок у стані перетягування
+    menu_instance.dragging = True
+
+    # Симулюємо подію руху миші та завершення циклу
+    mock_motion_event = mocker.Mock(type=pygame.MOUSEMOTION, pos=(mouse_x, menu_instance.slider_y))
+    mock_exit_event = mocker.Mock(type=pygame.MOUSEBUTTONDOWN, button=1, pos=menu_instance.back_rect.center)
+    monkeypatch.setattr("pygame.event.get", lambda: [mock_motion_event, mock_exit_event])
+
+    # Викликаємо метод show_options
+    menu_instance.show_options(mock_screen, background=mocker.Mock())
+
+    # Перевіряємо, чи правильно оновлено knob_x
+    assert menu_instance.knob_x == expected_knob_x, f"Очікувалось knob_x={expected_knob_x}, отримано {menu_instance.knob_x}"
+
+    # Перевіряємо, чи правильно оновлено volume
+    assert abs(menu_instance.volume - expected_volume) < 0.01, f"Очікувалось volume={expected_volume}, отримано {menu_instance.volume}"
+    
 @pytest.fixture
 def maps_menu(mock_score):
     menu = MapsMenu(x=100, y=100, score=mock_score)

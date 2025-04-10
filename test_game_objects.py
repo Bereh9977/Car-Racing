@@ -170,13 +170,13 @@ def test_no_collision(obstacles):
         result = obstacles.check_collision_obstackles(test_rect, map_choice)
         assert result is False, f"Не має бути зіткнення для {map_choice}"
 
-@pytest.mark.parametrize("map_choice, expected_attrs", [
-    ("winter", {"frozen": True, "show_ice": True}),
-    ("beach", {"spinning": True}),
-    ("map3", {"spinning": True}),
-    ("map2", {"angle_changed": True}),  # спеціальна перевірка на зміну кута
+@pytest.mark.parametrize("map_choice", [
+    "winter",
+    "beach",
+    "map3",
+    "map2",
 ])
-def test_obstakles_feaches_behavior(mocker, map_choice, expected_attrs):
+def test_obstakles_feaches_behavior(mocker, map_choice):
     # Ініціалізація Car
     car = Cars(0, 0, 0, 0, 0, 'img/car1.png', 'wasd')
 
@@ -240,7 +240,6 @@ def test_purchase_item_success(score, mocker):
 def test_purchase_item_not_enough_score(score, mocker):
     score.current_score = 40  # Бали не вистачають
     mocker.patch.object(score, 'load_purchases', return_value=set())
-    mock_save_purchases = mocker.patch.object(score, 'save_purchases')
 
     result = score.purchase_item("car1", "car")
     assert result is False, "Покупка не повинна бути успішною через недостатній рахунок"
@@ -248,7 +247,6 @@ def test_purchase_item_not_enough_score(score, mocker):
 # Тест для покупки вже придбаного предмета
 def test_purchase_item_already_purchased(score, mocker):
     mocker.patch.object(score, 'load_purchases', return_value={"car1"})  # Предмет вже куплений
-    mock_save_purchases = mocker.patch.object(score, 'save_purchases')
 
     result = score.purchase_item("car1", "car")
     assert result is False, "Покупка не повинна бути успішною, якщо предмет вже куплений"
