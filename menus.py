@@ -1,14 +1,23 @@
 import pygame
 from abc import ABC, abstractmethod
-from music import *
-import os
+from music import overlay_music_in_loop, start_music, stop_music
+from utilities import center_of, load_set_from_file, save_lines_to_file
+from settings import FONT_PATH, WHITE, BUTTON_SOUND, PURCHASE_SOUND, PURCHASED_CARS_FILE, PURCHASED_MAPS_FILE
 import time
+
 
 class Menu:
     """
     Клас Menu представляє головне меню гри.
     Відповідає за відображення кнопок, зворотний відлік та опції гри.
     """
+    KEY_BINDINGS = [
+        ('Key bindings:', (835, 200)),
+        ('ESC - pause the game', (770, 265)),
+        ('M - turn music on/off', (772, 315)),
+        ('N - play the next audio track', (720, 365)),
+    ]
+
     def __init__(self, x, y):
         """
         Ініціалізує об'єкт головного меню.
@@ -35,7 +44,7 @@ class Menu:
         self.menu_back_rect = self.menu_back_bnt.get_rect(topleft=(x - 790, y - 440))  # Прямокутник повернення в меню
         self.on_music_rect = self.on_music.get_rect(topleft=(x, y))  # Прямокутник кнопки увімкнення музики
         self.off_music_rect = self.off_music.get_rect(topleft=(x, y + 140))  # Прямокутник кнопки вимкнення музики
-        
+
         # Параметри повзунка гучності
         self.slider_x = self.off_music_rect.x
         self.slider_y = self.off_music_rect.y + self.off_music_rect.height + 50
@@ -82,19 +91,61 @@ class Menu:
         :param mode_choice: Режим гри ('single' або 'doubles').
         """
         overlay_music_in_loop("soundeffects/321go.mp3")  # Відтворення звуку відліку
+        racers = (car, bot) if mode_choice == 'single' else (car1, car2)
         for img in countdown_images:
             screen.fill((0, 0, 0))  # Очищення екрану
             roads.draw(screen)  # Малювання дороги
-            if mode_choice == 'single':
-                car.draw(screen)  # Малювання гравця
-                bot.draw(screen)  # Малювання бота
-            else:
-                car1.draw(screen)  # Малювання першого гравця
-                car2.draw(screen)  # Малювання другого гравця
-            img_rect = img.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
+            for racer in racers:
+                racer.draw(screen)
+            img_rect = img.get_rect(center=center_of(aspect_ratio))
             screen.blit(img, img_rect)
             pygame.display.update()
             time.sleep(1)  # Затримка 1 секунда між зображеннями
+
+    def render_key_bindings(self):
+        font = pygame.font.Font(FONT_PATH, 36)
+        rendered = []
+        for text, topleft in self.KEY_BINDINGS:
+            surface = font.render(text, True, WHITE)
+            rendered.append((surface, surface.get_rect(topleft=topleft)))
+        return rendered
+
+    def draw_options(self, screen, background, key_bindings):
+        screen.fill((0, 0, 0))
+        screen.blit(background, (0, 0))
+        screen.blit(self.imageBack, self.back_rect)
+        screen.blit(self.on_music, self.on_music_rect)
+        screen.blit(self.off_music, self.off_music_rect)
+        for surface, rect in key_bindings:
+            screen.blit(surface, rect)
+
+        # Малювання повзунка гучності
+        pygame.draw.rect(screen, (200, 200, 200), (self.slider_x, self.slider_y, self.slider_width, self.slider_height))
+        pygame.draw.circle(screen, (59, 59, 59), (self.knob_x, self.slider_y + self.slider_height // 2), self.slider_knob_radius)
+        pygame.display.update()
+
+    def is_on_slider_knob(self, pos):
+        return abs(pos[0] - self.knob_x) < self.slider_knob_radius * 2 and \
+            self.slider_y - self.slider_knob_radius < pos[1] < self.slider_y + self.slider_knob_radius
+
+    def handle_options_click(self, pos):
+        if self.on_music_rect.collidepoint(pos):
+            overlay_music_in_loop(BUTTON_SOUND)
+            start_music()  # Увімкнення музики
+        if self.off_music_rect.collidepoint(pos):
+            overlay_music_in_loop(BUTTON_SOUND)
+            stop_music()  # Вимкнення музики
+        if self.back_rect.collidepoint(pos):
+            overlay_music_in_loop(BUTTON_SOUND)
+            return True
+        if self.is_on_slider_knob(pos):
+            self.dragging = True
+        return False
+
+    def update_volume(self, mouse_x):
+        self.knob_x = max(self.slider_x, min(mouse_x, self.slider_x + self.slider_width))
+        self.volume = (self.knob_x - self.slider_x) / self.slider_width
+        pygame.mixer.music.set_volume(self.volume)  # Оновлення гучності
 
     def show_options(self, screen, background):
         """
@@ -104,31 +155,10 @@ class Menu:
         :param background: Фонове зображення.
         """
         options_active = True
-        pause_font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 36)
-        pause_text = pause_font.render('Key bindings:', True, (255, 255, 255))
-        pause_text1 = pause_font.render('ESC - pause the game', True, (255, 255, 255))
-        pause_text2 = pause_font.render('M - turn music on/off', True, (255, 255, 255))
-        pause_text3 = pause_font.render('N - play the next audio track', True, (255, 255, 255))
-        pause_rect = pause_text.get_rect(topleft=(835, 200))
-        pause_rect1 = pause_text1.get_rect(topleft=(770, 265))
-        pause_rect2 = pause_text2.get_rect(topleft=(772, 315))
-        pause_rect3 = pause_text3.get_rect(topleft=(720, 365))
+        key_bindings = self.render_key_bindings()
 
         while options_active:
-            screen.fill((0, 0, 0))
-            screen.blit(background, (0, 0))
-            screen.blit(self.imageBack, self.back_rect)
-            screen.blit(self.on_music, self.on_music_rect)
-            screen.blit(self.off_music, self.off_music_rect)
-            screen.blit(pause_text, pause_rect)
-            screen.blit(pause_text1, pause_rect1)
-            screen.blit(pause_text2, pause_rect2)
-            screen.blit(pause_text3, pause_rect3)
-
-            # Малювання повзунка гучності
-            pygame.draw.rect(screen, (200, 200, 200), (self.slider_x, self.slider_y, self.slider_width, self.slider_height))
-            pygame.draw.circle(screen, (59, 59, 59), (self.knob_x, self.slider_y + self.slider_height // 2), self.slider_knob_radius)
-            pygame.display.update()
+            self.draw_options(screen, background, key_bindings)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -138,28 +168,15 @@ class Menu:
                     return
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if self.on_music_rect.collidepoint(event.pos):
-                            overlay_music_in_loop("soundeffects/button_sound.mp3")
-                            start_music()  # Увімкнення музики
-                        if self.off_music_rect.collidepoint(event.pos):
-                            overlay_music_in_loop("soundeffects/button_sound.mp3")
-                            stop_music()  # Вимкнення музики
-                        if self.back_rect.collidepoint(event.pos):
-                            overlay_music_in_loop("soundeffects/button_sound.mp3")
+                        if self.handle_options_click(event.pos):
                             options_active = False
                             return
-                        # Перевірка кліку на повзунок
-                        if abs(event.pos[0] - self.knob_x) < self.slider_knob_radius * 2 and \
-                           self.slider_y - self.slider_knob_radius < event.pos[1] < self.slider_y + self.slider_knob_radius:
-                            self.dragging = True
                 elif event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.dragging = False
                 elif event.type == pygame.MOUSEMOTION:
                     if self.dragging:
-                        self.knob_x = max(self.slider_x, min(event.pos[0], self.slider_x + self.slider_width))
-                        self.volume = (self.knob_x - self.slider_x) / self.slider_width
-                        pygame.mixer.music.set_volume(self.volume)  # Оновлення гучності
+                        self.update_volume(event.pos[0])
 
     def show_rating(self, screen, background):
         """
@@ -184,8 +201,9 @@ class Menu:
                     return
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.back_rect2.collidepoint(event.pos):
-                        overlay_music_in_loop("soundeffects/button_sound.mp3")
+                        overlay_music_in_loop(BUTTON_SOUND)
                         return
+
 
 class ConfigurationMenu(ABC):
     """
@@ -200,8 +218,8 @@ class ConfigurationMenu(ABC):
         """
         self.x = x
         self.y = y
-        self.font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 36)  # Шрифт для тексту
-        self.title_font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 56)  # Шрифт для заголовків
+        self.font = pygame.font.Font(FONT_PATH, 36)  # Шрифт для тексту
+        self.title_font = pygame.font.Font(FONT_PATH, 56)  # Шрифт для заголовків
 
     def load_image(self, path):
         """
@@ -224,9 +242,26 @@ class ConfigurationMenu(ABC):
         """
         if font is None:
             font = self.font
-        text_surface = font.render(text, True, (255, 255, 255))
+        text_surface = font.render(text, True, WHITE)
         text_rect = text_surface.get_rect(center=(x, y))
         screen.blit(text_surface, text_rect)
+
+    def draw_labels(self, screen, labels):
+        for text, rect in labels:
+            self.draw_text(text, rect.centerx, rect.top - 30, screen)
+
+    def try_purchase(self, item_name, item_type, purchased_items, save):
+        if self.score.purchase_item(item_name, item_type):
+            overlay_music_in_loop(PURCHASE_SOUND)
+            purchased_items.add(item_name)
+            save()
+
+    @staticmethod
+    def find_clicked(pos, buttons):
+        for rect, value in buttons:
+            if rect.collidepoint(pos):
+                return value
+        return None
 
     @abstractmethod
     def draw(self):
@@ -238,11 +273,12 @@ class ConfigurationMenu(ABC):
         """Абстрактний метод для обробки кліків."""
         pass
 
+
 class MapsMenu(ConfigurationMenu):
     """
     Клас MapsMenu представляє меню вибору карт.
     """
-    def __init__(self, x, y, score, file_path="purchased_maps.txt"):
+    def __init__(self, x, y, score, file_path=PURCHASED_MAPS_FILE):
         """
         Ініціалізує меню вибору карт.
 
@@ -283,15 +319,11 @@ class MapsMenu(ConfigurationMenu):
 
         :return: Множина назв куплених карт.
         """
-        if not os.path.exists(self.file_path):
-            return set()
-        with open(self.file_path, "r") as file:
-            return set(file.read().splitlines())
+        return load_set_from_file(self.file_path)
 
     def save_purchased_maps(self):
         """Зберігає список куплених карт у файл."""
-        with open(self.file_path, "w") as file:
-            file.write("\n".join(self.purchased_maps))
+        save_lines_to_file(self.file_path, self.purchased_maps)
 
     def purchase_map(self, map_name):
         """
@@ -303,35 +335,52 @@ class MapsMenu(ConfigurationMenu):
             self.purchased_maps.add(map_name)
             self.save_purchased_maps()
 
+    def free_maps(self):
+        return [
+            ('map3', self.image_map3, self.map3_rect),
+            ('map2', self.image_map2, self.map2_rect),
+        ]
+
+    def locked_maps(self):
+        return [
+            ('beach', self.image_beach, self.image_beach_lock, self.beach_rect),
+            ('winter', self.image_winter, self.image_winter_lock, self.winter_rect),
+            ('summer', self.image_summer, self.image_summer_lock, self.summer_rect),
+            ('champions_field', self.image_champions_field, self.image_champions_field_lock, self.champions_field_rect),
+        ]
+
+    def buy_buttons(self):
+        return [
+            (self.buy_image_rect, 'beach'),
+            (self.buy_image_rect2, 'summer'),
+            (self.buy_image_rect3, 'champions_field'),
+            (self.buy_image_rect4, 'winter'),
+        ]
+
     def draw(self, screen):
         """
         Малює меню вибору карт на екрані.
 
         :param screen: Поверхня Pygame для відображення.
         """
-        screen.blit(self.image_map3, self.map3_rect.topleft)
-        screen.blit(self.image_map2, self.map2_rect.topleft)
-        screen.blit(self.image_beach if 'beach' in self.purchased_maps else self.image_beach_lock, self.beach_rect.topleft)
-        screen.blit(self.image_winter if 'winter' in self.purchased_maps else self.image_winter_lock, self.winter_rect.topleft)
-        screen.blit(self.image_summer if 'summer' in self.purchased_maps else self.image_summer_lock, self.summer_rect.topleft)
-        screen.blit(self.image_champions_field if 'champions_field' in self.purchased_maps else self.image_champions_field_lock, self.champions_field_rect.topleft)
+        for _, image, rect in self.free_maps():
+            screen.blit(image, rect.topleft)
+        for map_name, image, lock_image, rect in self.locked_maps():
+            screen.blit(image if map_name in self.purchased_maps else lock_image, rect.topleft)
 
-        if 'beach' not in self.purchased_maps:
-            screen.blit(self.buy_image, self.buy_image_rect.topleft)
-        if 'summer' not in self.purchased_maps:
-            screen.blit(self.buy_image, self.buy_image_rect2.topleft)
-        if 'champions_field' not in self.purchased_maps:
-            screen.blit(self.buy_image, self.buy_image_rect3.topleft)
-        if 'winter' not in self.purchased_maps:
-            screen.blit(self.buy_image, self.buy_image_rect4.topleft)
+        for buy_rect, map_name in self.buy_buttons():
+            if map_name not in self.purchased_maps:
+                screen.blit(self.buy_image, buy_rect.topleft)
 
         self.draw_text("Select a map:", self.beach_rect.centerx, self.y - 50, screen, self.title_font)
-        self.draw_text("Tidal Heatwave", self.map3_rect.centerx, self.map3_rect.top - 30, screen)
-        self.draw_text("Meadow Rush", self.map2_rect.centerx, self.map2_rect.top - 30, screen)
-        self.draw_text("Palm Paradise", self.beach_rect.centerx, self.beach_rect.top - 30, screen)
-        self.draw_text("Frozen Tides", self.winter_rect.centerx, self.winter_rect.top - 30, screen)
-        self.draw_text("Evergreen Escape", self.summer_rect.centerx, self.summer_rect.top - 30, screen)
-        self.draw_text("Champions Field", self.champions_field_rect.centerx, self.champions_field_rect.top - 30, screen)
+        self.draw_labels(screen, [
+            ("Tidal Heatwave", self.map3_rect),
+            ("Meadow Rush", self.map2_rect),
+            ("Palm Paradise", self.beach_rect),
+            ("Frozen Tides", self.winter_rect),
+            ("Evergreen Escape", self.summer_rect),
+            ("Champions Field", self.champions_field_rect),
+        ])
         self.score.draw_score(screen)
 
     def check_click(self, pos):
@@ -341,46 +390,24 @@ class MapsMenu(ConfigurationMenu):
         :param pos: Координати кліку (x, y).
         :return: Назва вибраної карти або None.
         """
-        if self.buy_image_rect.collidepoint(pos):
-            if self.score.purchase_item("beach", "map"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_maps.add("beach")
-                self.save_purchased_maps()
-        elif self.buy_image_rect2.collidepoint(pos):
-            if self.score.purchase_item("summer", "map"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_maps.add("summer")
-                self.save_purchased_maps()
-        elif self.buy_image_rect3.collidepoint(pos):
-            if self.score.purchase_item("champions_field", "map"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_maps.add("champions_field")
-                self.save_purchased_maps()
-        elif self.buy_image_rect4.collidepoint(pos):
-            if self.score.purchase_item("winter", "map"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_maps.add("winter")
-                self.save_purchased_maps()
+        map_to_buy = self.find_clicked(pos, self.buy_buttons())
+        if map_to_buy:
+            self.try_purchase(map_to_buy, "map", self.purchased_maps, self.save_purchased_maps)
 
-        if self.map3_rect.collidepoint(pos):
-            return 'map3'
-        elif self.map2_rect.collidepoint(pos):
-            return 'map2'
-        elif self.beach_rect.collidepoint(pos) and "beach" in self.purchased_maps:
-            return 'beach'
-        elif self.winter_rect.collidepoint(pos) and "winter" in self.purchased_maps:
-            return 'winter'
-        elif self.summer_rect.collidepoint(pos) and "summer" in self.purchased_maps:
-            return 'summer'
-        elif self.champions_field_rect.collidepoint(pos) and "champions_field" in self.purchased_maps:
-            return 'champions_field'
+        for map_name, _, rect in self.free_maps():
+            if rect.collidepoint(pos):
+                return map_name
+        for map_name, _, _, rect in self.locked_maps():
+            if rect.collidepoint(pos) and map_name in self.purchased_maps:
+                return map_name
         return None
+
 
 class CarsMenu(ConfigurationMenu):
     """
     Клас CarsMenu представляє меню вибору автомобілів.
     """
-    def __init__(self, x, y, score, file_path="purchased_cars.txt"):
+    def __init__(self, x, y, score, file_path=PURCHASED_CARS_FILE):
         """
         Ініціалізує меню вибору автомобілів.
 
@@ -417,15 +444,11 @@ class CarsMenu(ConfigurationMenu):
 
         :return: Множина назв куплених автомобілів.
         """
-        if not os.path.exists(self.file_path):
-            return set()
-        with open(self.file_path, "r") as file:
-            return set(file.read().splitlines())
+        return load_set_from_file(self.file_path)
 
     def save_purchased_cars(self):
         """Зберігає список куплених автомобілів у файл."""
-        with open(self.file_path, "w") as file:
-            file.write("\n".join(self.purchased_cars))
+        save_lines_to_file(self.file_path, self.purchased_cars)
 
     def purchase_car(self, car_name):
         """
@@ -437,32 +460,59 @@ class CarsMenu(ConfigurationMenu):
             self.purchased_cars.add(car_name)
             self.save_purchased_cars()
 
+    def locked_cars(self):
+        return [
+            ('car1', self.image_car1, self.image_car1_lock, self.car1_rect),
+            ('car2', self.image_car2, self.image_car2_lock, self.car2_rect),
+            ('car3', self.image_car3, self.image_car3_lock, self.car3_rect),
+        ]
+
+    def free_cars(self):
+        return [
+            ('car4', self.image_car4, self.car4_rect),
+            ('car5', self.image_car5, self.car5_rect),
+        ]
+
+    def buy_buttons(self):
+        return [
+            (self.buy_image_rect, 'car1'),
+            (self.buy_image2_rect, 'car2'),
+            (self.buy_image3_rect, 'car3'),
+        ]
+
     def draw(self, screen):
         """
         Малює меню вибору автомобілів на екрані.
 
         :param screen: Поверхня Pygame для відображення.
         """
-        screen.blit(self.image_car1 if 'car1' in self.purchased_cars else self.image_car1_lock, self.car1_rect.topleft)
-        screen.blit(self.image_car2 if 'car2' in self.purchased_cars else self.image_car2_lock, self.car2_rect.topleft)
-        screen.blit(self.image_car3 if 'car3' in self.purchased_cars else self.image_car3_lock, self.car3_rect.topleft)
-        screen.blit(self.image_car4, self.car4_rect.topleft)
-        screen.blit(self.image_car5, self.car5_rect.topleft)
+        for car_name, image, lock_image, rect in self.locked_cars():
+            screen.blit(image if car_name in self.purchased_cars else lock_image, rect.topleft)
+        for _, image, rect in self.free_cars():
+            screen.blit(image, rect.topleft)
 
-        if 'car1' not in self.purchased_cars:
-            screen.blit(self.buy_image, self.buy_image_rect.topleft)
-        if 'car2' not in self.purchased_cars:
-            screen.blit(self.buy_image, self.buy_image2_rect.topleft)
-        if 'car3' not in self.purchased_cars:
-            screen.blit(self.buy_image, self.buy_image3_rect.topleft)
+        for buy_rect, car_name in self.buy_buttons():
+            if car_name not in self.purchased_cars:
+                screen.blit(self.buy_image, buy_rect.topleft)
 
         self.draw_text("Select a car:", self.car2_rect.centerx, self.y - 50, screen, self.title_font)
-        self.draw_text("Ferrari 458 Challenge", self.car1_rect.centerx, self.car1_rect.top - 30, screen)
-        self.draw_text("Mclaren P1 Sports", self.car2_rect.centerx, self.car2_rect.top - 30, screen)
-        self.draw_text("Ford Mustang Shelby", self.car3_rect.centerx, self.car3_rect.top - 30, screen)
-        self.draw_text("Subaru Impreza WRX STI", self.car4_rect.centerx, self.car4_rect.top - 30, screen)
-        self.draw_text("Dodge Viper GTS", self.car5_rect.centerx, self.car5_rect.top - 30, screen)
+        self.draw_labels(screen, [
+            ("Ferrari 458 Challenge", self.car1_rect),
+            ("Mclaren P1 Sports", self.car2_rect),
+            ("Ford Mustang Shelby", self.car3_rect),
+            ("Subaru Impreza WRX STI", self.car4_rect),
+            ("Dodge Viper GTS", self.car5_rect),
+        ])
         self.score.draw_score(screen)
+
+    def selected_car(self, pos):
+        for car_name, _, _, rect in self.locked_cars():
+            if rect.collidepoint(pos) and car_name in self.purchased_cars:
+                return car_name
+        for car_name, _, rect in self.free_cars():
+            if rect.collidepoint(pos):
+                return car_name
+        return None
 
     def check_click(self, pos):
         """
@@ -471,38 +521,15 @@ class CarsMenu(ConfigurationMenu):
         :param pos: Координати кліку (x, y).
         :return: Назва вибраного автомобіля або None.
         """
-        if self.buy_image_rect.collidepoint(pos):
-            if self.score.purchase_item("car1", "car"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_cars.add("car1")
-                self.save_purchased_cars()
-        elif self.buy_image2_rect.collidepoint(pos):
-            if self.score.purchase_item("car2", "car"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_cars.add("car2")
-                self.save_purchased_cars()
-        elif self.buy_image3_rect.collidepoint(pos):
-            if self.score.purchase_item("car3", "car"):
-                overlay_music_in_loop("soundeffects/purchase.mp3")
-                self.purchased_cars.add("car3")
-                self.save_purchased_cars()
+        car_to_buy = self.find_clicked(pos, self.buy_buttons())
+        if car_to_buy:
+            self.try_purchase(car_to_buy, "car", self.purchased_cars, self.save_purchased_cars)
 
-        if self.car1_rect.collidepoint(pos) and "car1" in self.purchased_cars:
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            return "car1"
-        elif self.car2_rect.collidepoint(pos) and "car2" in self.purchased_cars:
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            return "car2"
-        elif self.car3_rect.collidepoint(pos) and "car3" in self.purchased_cars:
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            return "car3"
-        elif self.car4_rect.collidepoint(pos):
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            return "car4"
-        elif self.car5_rect.collidepoint(pos):
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            return "car5"
-        return None
+        car_name = self.selected_car(pos)
+        if car_name:
+            overlay_music_in_loop(BUTTON_SOUND)
+        return car_name
+
 
 class ModesMenu(ConfigurationMenu):
     """
@@ -530,8 +557,10 @@ class ModesMenu(ConfigurationMenu):
         screen.blit(self.image_single, self.single_rect.topleft)
         screen.blit(self.image_doubles, self.doubles_rect.topleft)
         self.draw_text("Select the game mode:", self.x + 855, self.y + 50, screen, self.title_font)
-        self.draw_text("Single", self.single_rect.centerx, self.single_rect.top - 30, screen)
-        self.draw_text("Doubles", self.doubles_rect.centerx, self.doubles_rect.top - 30, screen)
+        self.draw_labels(screen, [
+            ("Single", self.single_rect),
+            ("Doubles", self.doubles_rect),
+        ])
 
     def check_click(self, pos, mode_choice):
         """
@@ -541,12 +570,7 @@ class ModesMenu(ConfigurationMenu):
         :param mode_choice: Поточний режим гри.
         :return: Новий режим гри або None.
         """
-        if self.single_rect.collidepoint(pos):
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            mode_choice = 'single'
-            return mode_choice
-        elif self.doubles_rect.collidepoint(pos):
-            overlay_music_in_loop("soundeffects/button_sound.mp3")
-            mode_choice = 'doubles'
-            return mode_choice
-        return None
+        mode = self.find_clicked(pos, [(self.single_rect, 'single'), (self.doubles_rect, 'doubles')])
+        if mode:
+            overlay_music_in_loop(BUTTON_SOUND)
+        return mode

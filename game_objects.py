@@ -2,9 +2,33 @@ import pygame
 import random
 import math
 import time
-from utilities import scale_image
+from utilities import scale_image, center_of, load_set_from_file, save_lines_to_file
 from music import overlay_music_in_loop
-import os
+from settings import FONT_PATH, WHITE, RED, CAR_IMAGES, SCORE_FILE, PURCHASED_CARS_FILE, PURCHASED_MAPS_FILE
+
+CONTROL_KEYS = {
+    'wasd': {'forward': pygame.K_w, 'backward': pygame.K_s, 'left': pygame.K_a, 'right': pygame.K_d},
+    'arrows': {'forward': pygame.K_UP, 'backward': pygame.K_DOWN, 'left': pygame.K_LEFT, 'right': pygame.K_RIGHT},
+}
+
+COIN_POSITIONS = {
+    "winter": [(515, 286), (630, 580), (219, 521), (179, 904), (605, 1009), 
+               (881, 909), (1166, 632), (1377, 463), (1761, 583), (1712, 260)],
+    "beach": [(385, 932), (193, 521), (549, 366), (708, 702), (825, 1032), 
+              (950, 610), (1263, 549), (1383, 310), (1620, 521), (1588, 835)],
+    "map3": [(40, 503), (190, 748), (488, 941), (766, 594), (1283, 586), 
+             (1772, 371), (1577, 157), (1180, 295), (744, 91), (117, 156)],
+    "map2": [(162, 218), (165, 748), (564, 945), (1170, 849), (1540, 707), 
+             (1441, 287), (1228, 22), (1056, 367), (582, 590), (538, 86)],
+    "summer": [(373, 869), (716, 686), (1003, 608), (923, 296), (462, 479), 
+               (648, 176), (1008, 64), (1311, 247), (1165, 525), (1568, 776)],
+    "champions_field": [(376, 914), (711, 905), (1145, 960), (1494, 746), (1567, 391), 
+                        (1404, 84), (1103, 158), (765, 132), (320, 199), (391, 521)],
+}
+
+
+def make_rects(positions, image):
+    return [pygame.Rect(x, y, image.get_width(), image.get_height()) for x, y in positions]
 
 class Cars:
     """
@@ -89,20 +113,22 @@ class Cars:
 
         :return: 'forward', 'backward' або None.
         """
-        drive_direction = None
         keys = pygame.key.get_pressed()
+        control_keys = self.get_control_keys()
+        if control_keys is None:
+            return None
 
-        if self.controls == 'wasd':
-            if keys[pygame.K_w]:
-                drive_direction = 'forward'
-            elif keys[pygame.K_s]:
-                drive_direction = 'backward'
-        elif self.controls == 'arrows':
-            if keys[pygame.K_UP]:
-                drive_direction = 'forward'
-            elif keys[pygame.K_DOWN]:
-                drive_direction = 'backward'
-        return drive_direction
+        if keys[control_keys['forward']]:
+            return 'forward'
+        if keys[control_keys['backward']]:
+            return 'backward'
+        return None
+
+    def get_control_keys(self):
+        for scheme, control_keys in CONTROL_KEYS.items():
+            if self.controls == scheme:
+                return control_keys
+        return None
 
     def get_rotation_direction(self, drive_direction):
         """
@@ -112,31 +138,22 @@ class Cars:
         :return: 1 (ліворуч), -1 (праворуч) або 0 (без повороту).
         """
         keys = pygame.key.get_pressed()
-        rotation_direction = 0
+        control_keys = self.get_control_keys()
+        if control_keys is None:
+            return 0
 
-        if self.controls == 'wasd':
-            if (drive_direction == 'forward' or self.speed > 0):
-                if keys[pygame.K_d]:
-                    rotation_direction = -1
-                elif keys[pygame.K_a]:
-                    rotation_direction = 1
-            elif (drive_direction == 'backward' or self.speed < 0):
-                if keys[pygame.K_d]:
-                    rotation_direction = 1
-                elif keys[pygame.K_a]:
-                    rotation_direction = -1
-        elif self.controls == 'arrows':
-            if (drive_direction == 'forward' or self.speed > 0):
-                if keys[pygame.K_RIGHT]:
-                    rotation_direction = -1
-                elif keys[pygame.K_LEFT]:
-                    rotation_direction = 1
-            elif (drive_direction == 'backward' or self.speed < 0):
-                if keys[pygame.K_RIGHT]:
-                    rotation_direction = 1
-                elif keys[pygame.K_LEFT]:
-                    rotation_direction = -1
-        return rotation_direction
+        if drive_direction == 'forward' or self.speed > 0:
+            left_turn = 1
+        elif drive_direction == 'backward' or self.speed < 0:
+            left_turn = -1
+        else:
+            return 0
+
+        if keys[control_keys['right']]:
+            return -left_turn
+        if keys[control_keys['left']]:
+            return left_turn
+        return 0
 
     def rotate(self):
         """Обертає автомобіль на основі напрямку повороту."""
@@ -239,22 +256,31 @@ class Cars:
         """
         if obs.check_collision_obstackles(self.rect, map_choice):
             if map_choice == "winter":
-                self.frozen = True
-                overlay_music_in_loop("soundeffects/ice_sound.mp3")
-                self.freeze_time = time.time()
-                self.show_ice = True
-                self.ice_time = pygame.time.get_ticks()
-                obs.show_snowflakes = False
+                self.freeze(obs)
             elif map_choice == "beach" or map_choice == "map3":
-                self.spinning = True
-                overlay_music_in_loop("soundeffects/spinning.mp3")
-                self.spin_time = time.time()
+                self.start_spin()
             elif map_choice == "map2":
-                if not hasattr(self, "sand_turning") or time.time() - self.sand_turn_start >= 1.5:
-                    self.sand_turning = random.choice([-1, 1])
-                    self.sand_turn_start = time.time()
-                else:
-                    self.angle += self.sand_turning * 0.9
+                self.turn_on_sand()
+
+    def freeze(self, obs):
+        self.frozen = True
+        overlay_music_in_loop("soundeffects/ice_sound.mp3")
+        self.freeze_time = time.time()
+        self.show_ice = True
+        self.ice_time = pygame.time.get_ticks()
+        obs.show_snowflakes = False
+
+    def start_spin(self):
+        self.spinning = True
+        overlay_music_in_loop("soundeffects/spinning.mp3")
+        self.spin_time = time.time()
+
+    def turn_on_sand(self):
+        if not hasattr(self, "sand_turning") or time.time() - self.sand_turn_start >= 1.5:
+            self.sand_turning = random.choice([-1, 1])
+            self.sand_turn_start = time.time()
+        else:
+            self.angle += self.sand_turning * 0.9
 
     def update_car(self, obs, map_choice, score, mode_choice='single'):
         """
@@ -283,20 +309,15 @@ class Cars:
         rotation_direction = self.get_rotation_direction(drive_direction)
         self.rotation_direction = rotation_direction
         self.rotate()
-        moved = False
 
         if drive_direction == 'forward':
-            moved = True
             self.drive_forward()
         elif drive_direction == 'backward':
-            moved = True
             self.drive_backward()
-
-        if not moved:
-            if self.speed > 0:
-                self.reduce_speed_forward()
-            elif self.speed < 0:
-                self.reduce_speed_backward()
+        elif self.speed > 0:
+            self.reduce_speed_forward()
+        elif self.speed < 0:
+            self.reduce_speed_backward()
 
 class Bots(Cars):
     """
@@ -313,7 +334,7 @@ class Bots(Cars):
         :param angle: Початковий кут повороту.
         :param points: Список координат маршруту.
         """
-        available_cars = ["img/car1.png", "img/car2.png", "img/car3.png", "img/car4.png", "img/car5.png"]
+        available_cars = list(CAR_IMAGES.values())
         current_image = random.choice(available_cars)
         controls = 'wasd'
         super().__init__(x, y, speed, max_speed, angle, current_image, controls)
@@ -430,12 +451,20 @@ class Obstacles:
         self.banana_rand = random.sample(self.banana, 4)  # Випадкові банани (beach)
         self.banana2_rand = random.sample(self.banana2, 4)  # Випадкові банани (map3)
         self.sand_rand = random.sample(self.sand, 4)  # Випадковий пісок
-        self.snowflake_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.snowflakes_rand]
-        self.banana_rects = [pygame.Rect(x, y, self.image2.get_width(), self.image2.get_height()) for x, y in self.banana_rand]
-        self.banana2_rects = [pygame.Rect(x, y, self.image2.get_width(), self.image2.get_height()) for x, y in self.banana2_rand]
-        self.sand_rects = [pygame.Rect(x, y, self.image3.get_width(), self.image3.get_height()) for x, y in self.sand_rand]
+        self.snowflake_rects = make_rects(self.snowflakes_rand, self.image)
+        self.banana_rects = make_rects(self.banana_rand, self.image2)
+        self.banana2_rects = make_rects(self.banana2_rand, self.image2)
+        self.sand_rects = make_rects(self.sand_rand, self.image3)
         self.show_snowflakes = True  # Прапорець відображення сніжинок
         self.show_banana = True  # Прапорець відображення бананів
+
+    def obstacles_for_map(self, map_choice):
+        return {
+            'winter': (self.image, self.snowflakes_rand, self.snowflake_rects, True),
+            'beach': (self.image2, self.banana_rand, self.banana_rects, True),
+            'map3': (self.image2, self.banana2_rand, self.banana2_rects, True),
+            'map2': (self.image3, self.sand_rand, self.sand_rects, False),
+        }.get(map_choice)
 
     def draw_obstackles(self, screen, map_choice):
         """
@@ -444,22 +473,13 @@ class Obstacles:
         :param screen: Поверхня Pygame для відображення.
         :param map_choice: Назва поточної карти.
         """
-        if map_choice == "winter":
-            for i, (x, y) in enumerate(self.snowflakes_rand):
-                screen.blit(self.image, (x, y))
-                self.snowflake_rects[i].topleft = (x, y)
-        elif map_choice == 'beach':
-            for i, (x, y) in enumerate(self.banana_rand):
-                screen.blit(self.image2, (x, y))
-                self.banana_rects[i].topleft = (x, y)
-        elif map_choice == 'map3':
-            for i, (x, y) in enumerate(self.banana2_rand):
-                screen.blit(self.image2, (x, y))
-                self.banana2_rects[i].topleft = (x, y)
-        elif map_choice == 'map2':
-            for i, (x, y) in enumerate(self.sand_rand):
-                screen.blit(self.image3, (x, y))
-                self.sand_rects[i].topleft = (x, y)
+        obstacles = self.obstacles_for_map(map_choice)
+        if obstacles is None:
+            return
+        image, positions, rects, _ = obstacles
+        for i, (x, y) in enumerate(positions):
+            screen.blit(image, (x, y))
+            rects[i].topleft = (x, y)
 
     def check_collision_obstackles(self, car_rect, map_choice):
         """
@@ -469,35 +489,23 @@ class Obstacles:
         :param map_choice: Назва поточної карти.
         :return: True, якщо зіткнення сталося, інакше False.
         """
-        if map_choice == "winter":
-            for i, rect in enumerate(self.snowflake_rects):
-                if rect.colliderect(car_rect):
-                    self.snowflakes_rand.pop(i)
-                    self.snowflake_rects.pop(i)
-                    return True
-        elif map_choice == 'beach':
-            for i, rect in enumerate(self.banana_rects):
-                if rect.colliderect(car_rect):
-                    self.banana_rand.pop(i)
-                    self.banana_rects.pop(i)
-                    return True
-        elif map_choice == 'map3':
-            for i, rect in enumerate(self.banana2_rects):
-                if rect.colliderect(car_rect):
-                    self.banana2_rand.pop(i)
-                    self.banana2_rects.pop(i)
-                    return True
-        elif map_choice == 'map2':
-            for i, rect in enumerate(self.sand_rects):
-                if rect.colliderect(car_rect):
-                    return True
+        obstacles = self.obstacles_for_map(map_choice)
+        if obstacles is None:
+            return False
+        _, positions, rects, removable = obstacles
+        for i, rect in enumerate(rects):
+            if rect.colliderect(car_rect):
+                if removable:
+                    positions.pop(i)
+                    rects.pop(i)
+                return True
         return False
 
 class Score:
     """
     Клас Score відповідає за підрахунок очок, розміщення монет і управління покупками.
     """
-    def __init__(self, image_path, map_choice="none", file_path="score.txt", car_file_path="purchased_cars.txt", map_file_path="purchased_maps.txt"):
+    def __init__(self, image_path, map_choice="none", file_path=SCORE_FILE, car_file_path=PURCHASED_CARS_FILE, map_file_path=PURCHASED_MAPS_FILE):
         """
         Ініціалізує об'єкт очок.
 
@@ -516,25 +524,14 @@ class Score:
         self.buy_prices = {"car": 3000, "map": 5000}  # Ціни для покупок
         
         self.coin_positions = {  # Можливі позиції монет для кожної карти
-            "winter": [(515, 286), (630, 580), (219, 521), (179, 904), (605, 1009), 
-                       (881, 909), (1166, 632), (1377, 463), (1761, 583), (1712, 260)],
-            "beach": [(385, 932), (193, 521), (549, 366), (708, 702), (825, 1032), 
-                      (950, 610), (1263, 549), (1383, 310), (1620, 521), (1588, 835)],
-            "map3": [(40, 503), (190, 748), (488, 941), (766, 594), (1283, 586), 
-                     (1772, 371), (1577, 157), (1180, 295), (744, 91), (117, 156)],
-            "map2": [(162, 218), (165, 748), (564, 945), (1170, 849), (1540, 707), 
-                     (1441, 287), (1228, 22), (1056, 367), (582, 590), (538, 86)],
-            "summer": [(373, 869), (716, 686), (1003, 608), (923, 296), (462, 479), 
-                       (648, 176), (1008, 64), (1311, 247), (1165, 525), (1568, 776)],
-            "champions_field": [(376, 914), (711, 905), (1145, 960), (1494, 746), (1567, 391), 
-                               (1404, 84), (1103, 158), (765, 132), (320, 199), (391, 521)],
+            **COIN_POSITIONS,
             "none": [(random.randint(100, 1800), random.randint(100, 900)) for _ in range(5)]
         }
         available_positions = self.coin_positions.get(map_choice, [])
         self.coins = random.sample(available_positions, min(5, len(available_positions)))
-        self.coin_rects = [pygame.Rect(x, y, self.image.get_width(), self.image.get_height()) for x, y in self.coins]
+        self.coin_rects = make_rects(self.coins, self.image)
         self.last_score = -1
-        self.font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 36)
+        self.font = pygame.font.Font(FONT_PATH, 36)
         self.score_pos = (1700, 10)
         self.load_score()
 
@@ -584,10 +581,7 @@ class Score:
         :param file_path: Шлях до файлу.
         :return: Множина куплених предметів.
         """
-        if not os.path.exists(file_path):
-            return set()
-        with open(file_path, "r") as file:
-            return set(file.read().splitlines())
+        return load_set_from_file(file_path)
 
     def save_purchases(self, file_path, purchases):
         """
@@ -596,8 +590,10 @@ class Score:
         :param file_path: Шлях до файлу.
         :param purchases: Множина куплених предметів.
         """
-        with open(file_path, "w") as file:
-            file.write("\n".join(purchases))
+        save_lines_to_file(file_path, purchases)
+
+    def purchases_file(self, item_type):
+        return self.car_file_path if item_type == "car" else self.map_file_path
 
     def purchase_item(self, item_name, item_type):
         """
@@ -609,7 +605,7 @@ class Score:
         """
         if item_type not in self.buy_prices:
             return False
-        file_path = self.car_file_path if item_type == "car" else self.map_file_path
+        file_path = self.purchases_file(item_type)
         purchased_items = self.load_purchases(file_path)
         price = self.buy_prices[item_type]
         if self.current_score >= price and item_name not in purchased_items:
@@ -651,7 +647,7 @@ class Score:
         """
         if self.current_score != self.last_score:
             self.last_score = self.current_score
-            self.score_text = self.font.render(f"Score: {self.current_score}", True, (255, 255, 255))
+            self.score_text = self.font.render(f"Score: {self.current_score}", True, WHITE)
         screen.blit(self.score_text, self.score_pos)
 
     def is_item_purchased(self, item_name, item_type):
@@ -662,8 +658,7 @@ class Score:
         :param item_type: Тип предмета ('car' або 'map').
         :return: True, якщо куплено, інакше False.
         """
-        file_path = self.car_file_path if item_type == "car" else self.map_file_path
-        purchased_items = self.load_purchases(file_path)
+        purchased_items = self.load_purchases(self.purchases_file(item_type))
         return item_name in purchased_items
 
     def check_buy_click(self, pos, item_name, buy_rect, item_type):
@@ -742,19 +737,19 @@ class Finish:
             if self.car1_wins == 0:
                 overlay_music_in_loop("soundeffects/car1_win_pt1.mp3")
             self.car1_wins += 1
-            self.display_circle_number(screen, aspect_ratio)
-            car1.reset()
-            car2.reset()
-            time.sleep(3)
+            self.finish_circle(screen, aspect_ratio, car1, car2)
         elif car2.cross_finish(car2_collision_point, self.required_side):
             if self.car2_wins == 0:
                 overlay_music_in_loop("soundeffects/car2_win_pt1.mp3")
             self.car2_wins += 1
-            self.display_circle_number(screen, aspect_ratio)
-            car1.reset()
-            car2.reset()
-            time.sleep(3)
+            self.finish_circle(screen, aspect_ratio, car1, car2)
         return False
+
+    def finish_circle(self, screen, aspect_ratio, car1, car2):
+        self.display_circle_number(screen, aspect_ratio)
+        car1.reset()
+        car2.reset()
+        time.sleep(3)
 
     def credit_prize(self, score, amount):
         """
@@ -773,11 +768,7 @@ class Finish:
         :param screen: Поверхня Pygame для відображення.
         :param aspect_ratio: Розмір екрану.
         """
-        font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 72)
-        text = font.render(f"Circle #{self.car1_wins + self.car2_wins} out of {self.required_circles} done!", True, (255, 0, 0))
-        text_rect = text.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
-        screen.blit(text, text_rect)
-        pygame.display.update()
+        self.draw_message(screen, aspect_ratio, f"Circle #{self.car1_wins + self.car2_wins} out of {self.required_circles} done!")
         time.sleep(1)
 
     def show_result(self, screen, aspect_ratio, message, musicPath):
@@ -789,10 +780,14 @@ class Finish:
         :param message: Повідомлення про результат.
         :param musicPath: Шлях до звуку результату.
         """
-        font = pygame.font.Font("fonts/AveriaSansLibre-Bold.ttf", 72)
-        text = font.render(message, True, (255, 0, 0))
-        text_rect = text.get_rect(center=(aspect_ratio[0] // 2, aspect_ratio[1] // 2))
-        screen.blit(text, text_rect)
-        pygame.display.update()
+        self.draw_message(screen, aspect_ratio, message)
         overlay_music_in_loop(musicPath)
         time.sleep(6)
+
+    @staticmethod
+    def draw_message(screen, aspect_ratio, message):
+        font = pygame.font.Font(FONT_PATH, 72)
+        text = font.render(message, True, RED)
+        text_rect = text.get_rect(center=center_of(aspect_ratio))
+        screen.blit(text, text_rect)
+        pygame.display.update()
