@@ -5,7 +5,10 @@ from music import overlay_music_in_loop, next_track, mute_music, music_playing
 from utilities import scale_image
 from maps_config import get_map_config
 from settings import (SCREEN_SIZE, WINDOW_TITLE, FPS, FONT_PATH, WHITE, MENU_BACKGROUND,
-                      FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE, CARSCENE_MAP2, AUDIO_MAP2, CARSCENE_WINTER, AUDIO_WINTER)
+                      FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE, 
+                      CARSCENE_MAP2, AUDIO_MAP2, CARSCENE_WINTER, AUDIO_WINTER, CARSCENE_MAP3, 
+                      AUDIO_MAP3, CARSCENE_SUMMER, AUDIO_SUMMER, CARSCENE_BEACH, AUDIO_BEACH,
+                      CARSCENE_CHAMPION_FIELD, AUDIO_CHAMPION_FIELD)
 import cv2
 
 pygame.init()
@@ -97,6 +100,14 @@ class GameSys:
             self.show_catscene(CARSCENE_MAP2, AUDIO_MAP2) # ffmpeg -i video/begin_winter.mp4 -vn -acodec libmp3lame -q:a 2 video/begin_winter.mp3
         if self.map_choice == "winter":
             self.show_catscene(CARSCENE_WINTER, AUDIO_WINTER)
+        if self.map_choice == "summer":
+            self.show_catscene(CARSCENE_SUMMER, AUDIO_SUMMER)
+        if self.map_choice == "map3":
+            self.show_catscene(CARSCENE_MAP3, AUDIO_MAP3)
+        if self.map_choice == "beach":
+            self.show_catscene(CARSCENE_BEACH, AUDIO_BEACH)
+        if self.map_choice == "champions_field":
+            self.show_catscene(CARSCENE_CHAMPION_FIELD, AUDIO_CHAMPION_FIELD)
         self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.car1, self.car2, self.bot, self.aspect_ratio, self.mode_choice)  # Зворотний відлік
 
     def show_catscene(self, video_path, audio_path):
