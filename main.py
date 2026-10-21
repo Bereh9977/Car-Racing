@@ -5,10 +5,10 @@ from music import overlay_music_in_loop, next_track, mute_music, music_playing
 from utilities import scale_image
 from maps_config import get_map_config
 from settings import (SCREEN_SIZE, WINDOW_TITLE, FPS, FONT_PATH, WHITE, MENU_BACKGROUND,
-                      FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE)
+                      FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE, CARSCENE_MAP2, AUDIO_MAP2, CARSCENE_WINTER, AUDIO_WINTER)
+import cv2
 
 pygame.init()
-
 
 def is_left_click(event):
     return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
@@ -93,7 +93,52 @@ class GameSys:
     def start_new_game(self):
         self.in_menu = True  # Повернення в меню перед новою грою
         self.show_menu()  # Відображення головного меню
+        if self.map_choice == "map2":
+            self.show_catscene(CARSCENE_MAP2, AUDIO_MAP2) # ffmpeg -i video/begin_winter.mp4 -vn -acodec libmp3lame -q:a 2 video/begin_winter.mp3
+        if self.map_choice == "winter":
+            self.show_catscene(CARSCENE_WINTER, AUDIO_WINTER)
         self.menu.countdown(self.countdown_images, self.screen, self.roads, self.car, self.car1, self.car2, self.bot, self.aspect_ratio, self.mode_choice)  # Зворотний відлік
+
+    def show_catscene(self, video_path, audio_path):
+        """Відтворення відеокатсцени перед початком гонки."""
+        video = cv2.VideoCapture(video_path)
+        clock = pygame.time.Clock()
+        video_fps = video.get(cv2.CAP_PROP_FPS)
+
+        if not video_fps or video_fps <= 0:
+            video_fps = 30
+
+        playing = True
+        pygame.mixer.music.load(audio_path)
+        pygame.mixer.music.play()
+        while playing and self.running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    playing = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        playing = False
+
+            if not playing:
+                break
+
+            success, frame = video.read()
+            if not success:
+                break
+
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            frame_surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+            frame_surface = pygame.transform.scale(frame_surface, self.screen.get_size())
+
+            self.screen.blit(frame_surface, (0, 0))
+            pygame.display.flip()
+
+            clock.tick(video_fps)
+
+        video.release()
+        pygame.mixer.music.stop()
 
     def draw_track(self):
         self.roads.draw(self.screen)  # Відображення доріг

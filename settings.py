@@ -25,3 +25,8 @@ DEFAULT_CAR_IMAGE = CAR_IMAGES['car5']
 SCORE_FILE = "score.txt"
 PURCHASED_CARS_FILE = "purchased_cars.txt"
 PURCHASED_MAPS_FILE = "purchased_maps.txt"
+
+CARSCENE_MAP2 = "video/begin_map2.mp4"
+AUDIO_MAP2 = "video/begin_map2.mp3"
+CARSCENE_WINTER = "video/begin_winter.mp4"
+AUDIO_WINTER = "video/begin_winter.mp3"
