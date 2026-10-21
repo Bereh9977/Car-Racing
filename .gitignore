@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+reports/
+
+# Player save data (created at runtime)
+score.txt
+purchased_cars.txt
+purchased_maps.txt
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
