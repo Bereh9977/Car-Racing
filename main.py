@@ -5,7 +5,8 @@ from music import overlay_music_in_loop, next_track, mute_music, music_playing
 from utilities import scale_image
 from maps_config import get_map_config
 from race_points import RaceTracker, RacePointsStore, build_gates
-from settings import (SCREEN_SIZE, WINDOW_TITLE, FPS, FONT_PATH, WHITE, MENU_BACKGROUND,
+from game_clock import FixedTimestep
+from settings import (SCREEN_SIZE, WINDOW_TITLE, FPS, PHYSICS_RATE, MAX_FRAME_TIME, FONT_PATH, WHITE, MENU_BACKGROUND,
                       FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE, 
                       CARSCENE_MAP2, AUDIO_MAP2, CARSCENE_WINTER, AUDIO_WINTER, CARSCENE_MAP3, 
                       AUDIO_MAP3, CARSCENE_SUMMER, AUDIO_SUMMER, CARSCENE_BEACH, AUDIO_BEACH,
@@ -56,6 +57,7 @@ class GameSys:
         self.race_tracker = None  # Очки гонки поточного заїзду
         self.race_points_store = RacePointsStore()  # Збережені очки гонки
         self.hud_font = pygame.font.Font(FONT_PATH, 36)  # Шрифт для очок гонки
+        self.timestep = FixedTimestep(PHYSICS_RATE, MAX_FRAME_TIME)  # Фіксований крок симуляції
 
     @staticmethod
     def load_countdown_images():
@@ -73,31 +75,38 @@ class GameSys:
         Цей метод запускає гру, відображає меню, оновлює екран та обробляє події.
         """
         new_game = True  # Прапорець для запуску нової гри
-        clock = pygame.time.Clock()  # Об'єкт для регулювання FPS
         while self.running:
             if new_game:
                 self.start_new_game()
+                self.timestep.reset()  # Час, проведений у меню, катсцені та відліку, не враховується
                 new_game = False  # Вимикаємо прапорець нової гри після запуску
 
-            self.draw_track()
-
-            if self.mode_choice == 'single':
-                new_game = self.update_single()
-            else:
-                new_game = self.update_doubles()
-
+            self.draw_frame()
             pygame.display.update()  # Оновлення екрану
 
             if self.handle_game_events():
                 new_game = True  # Повернення до меню
+                continue
 
-            self.handle_road_collisions()
-            self.bot.move()  # Рух бота
-            if self.race_tracker is not None:
-                self.race_tracker.update()  # Перевірка контрольних воріт
-            clock.tick(FPS)  # Обмеження FPS
+            self.timestep.tick(FPS)  # Обмеження FPS
+            new_game = self.run_physics_steps()
 
         pygame.quit()  # Завершення роботи Pygame
+
+    def run_physics_steps(self):
+        """
+        Виконує фіксовані кроки симуляції за час, що минув з попереднього кадру.
+
+        :return: True, якщо гонка завершена.
+        """
+        for _ in self.timestep.steps():
+            circles_before = self.finish.circles_done()
+            if self.update_physics():
+                return True
+            if self.finish.circles_done() != circles_before:
+                self.timestep.reset()  # Пауза після кола не враховується
+                break
+        return False
 
     def start_new_game(self):
         self.in_menu = True  # Повернення в меню перед новою грою
@@ -162,23 +171,45 @@ class GameSys:
         self.finish.draw(self.screen)  # Відображення фінішу
         self.obs.draw_obstackles(self.screen, self.map_choice)  # Відображення перешкод
 
+    def draw_frame(self):
+        self.draw_track()
+        if self.mode_choice == 'single':
+            self.score.draw_coins(self.screen)  # Малювання монет
+            self.car.draw(self.screen)  # Малювання гравця
+            self.bot.draw(self.screen)  # Малювання бота
+            self.draw_race_overlay()
+            self.score.draw_score(self.screen)  # Відображення очок
+        else:
+            self.car1.draw(self.screen)
+            self.car2.draw(self.screen)
+            self.draw_race_overlay()
+
+    def update_physics(self):
+        """
+        Виконує один крок симуляції: рух машин, фініш, зіткнення, бот і контрольні ворота.
+
+        :return: True, якщо гонка завершена.
+        """
+        if self.mode_choice == 'single':
+            race_over = self.update_single()
+        else:
+            race_over = self.update_doubles()
+        self.handle_road_collisions()
+        self.bot.move()  # Рух бота
+        if self.race_tracker is not None:
+            self.race_tracker.update()  # Перевірка контрольних воріт
+        return race_over
+
     def update_single(self):
-        self.score.draw_coins(self.screen)  # Малювання монет
-        self.car.draw(self.screen)  # Малювання гравця
         self.car.update_car(self.obs, self.map_choice, self.score)  # Оновлення стану гравця
-        self.bot.draw(self.screen)  # Малювання бота
-        self.draw_race_overlay()
         new_game = self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score, self.race_tracker)  # Перевірка перетину фінішу
-        self.score.draw_score(self.screen)  # Відображення очок
         if new_game:
             self.save_race_points()
         return new_game
 
     def update_doubles(self):
         for car in (self.car1, self.car2):
-            car.draw(self.screen)
             car.update_car(self.obs, self.map_choice, self.score, self.mode_choice)
-        self.draw_race_overlay()
         return self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2, race_tracker=self.race_tracker)  # Перевірка перетину фінішу
 
     def create_race_tracker(self, map_choice):
@@ -213,6 +244,7 @@ class GameSys:
                 if event.key == pygame.K_ESCAPE:
                     if not self.handle_pause():  # Виклик меню паузи
                         return True
+                    self.timestep.reset()  # Час паузи не враховується
                 elif event.key == pygame.K_n:
                     if music_playing.is_set():
                         next_track()  # Перемикання треку

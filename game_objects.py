@@ -723,7 +723,7 @@ class Finish:
         :param race_tracker: Об'єкт RaceTracker для очок гонки (опціонально).
         :return: True, якщо гонка завершена, інакше False.
         """
-        if self.car1_wins + self.car2_wins == self.required_circles:
+        if self.circles_done() == self.required_circles:
             details = None
             if race_tracker is not None:
                 race_tracker.finish_race(self.required_circles)
@@ -762,6 +762,9 @@ class Finish:
         car2.reset()
         time.sleep(3)
 
+    def circles_done(self):
+        return self.car1_wins + self.car2_wins
+
     def credit_prize(self, score, amount):
         """
         Надає призові очки переможцю.
@@ -779,7 +782,7 @@ class Finish:
         :param screen: Поверхня Pygame для відображення.
         :param aspect_ratio: Розмір екрану.
         """
-        self.draw_message(screen, aspect_ratio, f"Circle #{self.car1_wins + self.car2_wins} out of {self.required_circles} done!")
+        self.draw_message(screen, aspect_ratio, f"Circle #{self.circles_done()} out of {self.required_circles} done!")
         time.sleep(1)
 
     def show_result(self, screen, aspect_ratio, message, musicPath, details=None):
