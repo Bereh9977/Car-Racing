@@ -195,8 +195,11 @@ class Menu:
         """
         Читає очки гравця з файлу.
         """
-        with open(self.score_file, "r") as file:
-            self.current_score = int(file.read().strip())
+        try:
+            with open(self.score_file, "r") as file:
+                self.current_score = int(file.read().strip())
+        except (FileNotFoundError, ValueError):
+            self.current_score = 0
         return self.current_score
 
     def draw_player_row(self, screen, name_surface, score_surface):
