@@ -2,7 +2,9 @@ import pygame
 from abc import ABC, abstractmethod
 from music import overlay_music_in_loop, start_music, stop_music
 from utilities import center_of, load_set_from_file, save_lines_to_file
-from settings import FONT_PATH, WHITE, BUTTON_SOUND, PURCHASE_SOUND, PURCHASED_CARS_FILE, PURCHASED_MAPS_FILE
+from settings import (FONT_PATH, WHITE, GOLD, BUTTON_SOUND, PURCHASE_SOUND, PURCHASED_CARS_FILE, PURCHASED_MAPS_FILE,
+                      RACE_POINTS_FILE, BOT_NAME)
+from race_points import RacePointsStore
 import re
 import time
 
@@ -20,12 +22,13 @@ class Menu:
     ]
 
     AVATAR_SIZE = 120
-    PLAYER_ROW_LEFT = 250
-    PLAYER_ROW_CENTER_Y = 400
+    PLAYER_ROW_LEFT = 300
     PLAYER_ROW_RIGHT = 250
-    BOT_ROW_CENTER_Y = 230
+    PLACE_LABEL_OFFSET = 50
+    ROW_CENTER_YS = (230, 400)  # Перше та друге місце
+    MISSION_CENTER_Y = 570
 
-    def __init__(self, x, y, username="Yahtzee", score_file="score.txt", avatar_path="img/user_icon.png", avatar_bot_path="img/bot_icon.png"):
+    def __init__(self, x, y, username="Yahtzee", race_points_file=RACE_POINTS_FILE, avatar_path="img/user_icon.png", avatar_bot_path="img/bot_icon.png"):
         """
         Ініціалізує об'єкт головного меню.
 
@@ -63,10 +66,11 @@ class Menu:
         self.dragging = False  # Прапорець перетягування повзунка
 
         self.username = username
-        self.score_file = score_file
+        self.race_points_file = race_points_file
         self.avatar = self.load_image(avatar_path, (self.AVATAR_SIZE, self.AVATAR_SIZE))
         self.avatar_bot = self.load_image(avatar_bot_path, (self.AVATAR_SIZE, self.AVATAR_SIZE))
         self.rating_font = pygame.font.Font(FONT_PATH, 48)
+        self.mission_font = pygame.font.Font(FONT_PATH, 40)
 
     def load_image(self, path, size):
         """
@@ -191,66 +195,70 @@ class Menu:
                     if self.dragging:
                         self.update_volume(event.pos[0])
 
-    def load_score(self):
+    def draw_rating_row(self, screen, place, avatar, name, points, center_y):
         """
-        Читає очки гравця з файлу.
-        """
-        try:
-            with open(self.score_file, "r") as file:
-                self.current_score = int(file.read().strip())
-        except (FileNotFoundError, ValueError):
-            self.current_score = 0
-        return self.current_score
-
-    def draw_player_row(self, screen, name_surface, score_surface):
-        """
-        Малює рядок гравця на таблиці лідерів: іконка, ім'я та очки.
+        Малює рядок таблиці лідерів: місце, іконка, ім'я та очки гонки.
 
         :param screen: Поверхня Pygame для відображення.
-        :param name_surface: Готовий рендер імені.
-        :param score_surface: Готовий рендер очок.
+        :param place: Місце в рейтингу (1, 2, ...).
+        :param avatar: Іконка учасника.
+        :param name: Ім'я учасника.
+        :param points: Очки гонки учасника.
+        :param center_y: Координата Y центру рядка.
         """
         board = self.leadorboard_rect
-        center_y = board.top + self.PLAYER_ROW_CENTER_Y
+        color = GOLD if place == 1 else WHITE
 
-        avatar_rect = self.avatar.get_rect(midleft=(board.left + self.PLAYER_ROW_LEFT, center_y))
+        place_surface = self.rating_font.render(f"{place}.", True, color)
+        name_surface = self.rating_font.render(name, True, WHITE)
+        score_surface = self.rating_font.render(str(points), True, color)
+
+        avatar_rect = avatar.get_rect(midleft=(board.left + self.PLAYER_ROW_LEFT, center_y))
+        place_rect = place_surface.get_rect(center=(avatar_rect.left - self.PLACE_LABEL_OFFSET, center_y))
         name_rect = name_surface.get_rect(midleft=(avatar_rect.right + 30, center_y))
         score_rect = score_surface.get_rect(midright=(board.right - self.PLAYER_ROW_RIGHT, center_y))
 
-        screen.blit(self.avatar, avatar_rect)
+        screen.blit(place_surface, place_rect)
+        screen.blit(avatar, avatar_rect)
         screen.blit(name_surface, name_rect)
         screen.blit(score_surface, score_rect)
 
-    def draw_bot_row(self, screen, name_surface, score_surface):
+    def mission_text(self, store):
         """
-        Малює рядок бота на таблиці лідерів: іконка, ім'я та очки.
+        Повертає текст місії для таблиці лідерів.
+
+        :param store: Об'єкт RacePointsStore з очками гравця та бота.
+        """
+        points_to_go = store.points_to_first_place()
+        if points_to_go == 0:
+            return f"Mission complete! You beat {BOT_NAME}!"
+        return f"Mission: beat {BOT_NAME}! {points_to_go} race points to go"
+
+    def draw_rating(self, screen, store):
+        """
+        Малює рейтинг за очками гонки (бот спочатку перший) та текст місії.
 
         :param screen: Поверхня Pygame для відображення.
-        :param name_surface: Готовий рендер імені.
-        :param score_surface: Готовий рендер очок.
+        :param store: Об'єкт RacePointsStore з очками гравця та бота.
         """
+        rows = store.rating(self.username, BOT_NAME)
+        for place, ((name, points, is_bot), center_y) in enumerate(zip(rows, self.ROW_CENTER_YS), start=1):
+            avatar = self.avatar_bot if is_bot else self.avatar
+            self.draw_rating_row(screen, place, avatar, name, points, self.leadorboard_rect.top + center_y)
+
+        mission_surface = self.mission_font.render(self.mission_text(store), True, GOLD)
         board = self.leadorboard_rect
-        center_y = board.top + self.BOT_ROW_CENTER_Y
-
-        avatar_bot_rect = self.avatar_bot.get_rect(midleft=(board.left + self.PLAYER_ROW_LEFT, center_y))
-        name_rect = name_surface.get_rect(midleft=(avatar_bot_rect.right + 30, center_y))
-        score_rect = score_surface.get_rect(midright=(board.right - self.PLAYER_ROW_RIGHT, center_y))
-
-        screen.blit(self.avatar_bot, avatar_bot_rect)
-        screen.blit(name_surface, name_rect)
-        screen.blit(score_surface, score_rect)
+        screen.blit(mission_surface, mission_surface.get_rect(center=(board.centerx, board.top + self.MISSION_CENTER_Y)))
 
     def show_rating(self, screen, background):
         """
-        Відображає таблицю лідерів із іконкою, ім'ям та очками гравця.
+        Відображає таблицю лідерів за очками гонки: гравець проти бота.
 
         :param screen: Поверхня Pygame для відображення.
         :param background: Фонове зображення.
         """
         # Очки читаємо один раз при відкритті екрана, а не щокадру
-        name_surface = self.rating_font.render(self.username, True, WHITE)
-        score_surface_player = self.rating_font.render(str(self.load_score()), True, WHITE)
-        score_surface_bot = self.rating_font.render(str(10000), True, WHITE)
+        store = RacePointsStore(self.race_points_file)
 
         rating_active = True
         while rating_active:
@@ -258,8 +266,7 @@ class Menu:
             screen.blit(background, (0, 0))
             screen.blit(self.imageBack, self.back_rect2)
             screen.blit(self.leadorboard, self.leadorboard_rect)
-            self.draw_player_row(screen, name_surface, score_surface_player)
-            self.draw_bot_row(screen, name_surface, score_surface_bot)
+            self.draw_rating(screen, store)
             pygame.display.update()
 
             for event in pygame.event.get():

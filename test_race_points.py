@@ -267,3 +267,40 @@ def test_finish_crossed_reports_lap_and_race(mocker):
     assert finish.crossed(None, (1920, 1080), car1, car2, race_tracker=tracker) is True
     tracker.finish_race.assert_called_once_with(1)
     assert show_result.call_args[0][-1] == ["You: 10 race points"]
+
+
+def test_store_bot_starts_with_head_start_and_is_first(tmp_path):
+    store = RacePointsStore(str(tmp_path / "race_points.json"))
+    assert store.bot_total == race_points.BOT_STARTING_POINTS
+    assert store.rating("Player", "Bot")[0] == ("Bot", race_points.BOT_STARTING_POINTS, True), "Спочатку бот перший"
+    assert store.points_to_first_place() == race_points.BOT_STARTING_POINTS + 1
+
+
+def test_store_saves_bot_points(tmp_path):
+    path = tmp_path / "race_points.json"
+    store = RacePointsStore(str(path))
+    store.add_result("winter", 900, bot_points=400)
+    reloaded = RacePointsStore(str(path))
+    assert reloaded.total == 900
+    assert reloaded.bot_total == race_points.BOT_STARTING_POINTS + 400
+
+
+def test_old_store_file_without_bot_gets_head_start(tmp_path):
+    path = tmp_path / "race_points.json"
+    path.write_text('{"total": 1200, "best": {"map3": 700}}')
+    store = RacePointsStore(str(path))
+    assert store.total == 1200 and store.bot_total == race_points.BOT_STARTING_POINTS
+
+
+@pytest.mark.parametrize("player, bot, first, to_go", [
+    (100, 5000, "Bot", 4901),
+    (5000, 5000, "Bot", 1),      # нічия: бот залишається першим
+    (5001, 5000, "Player", 0),
+])
+def test_rating_order_and_points_to_first(tmp_path, player, bot, first, to_go):
+    store = RacePointsStore(str(tmp_path / "race_points.json"))
+    store.total, store.bot_total = player, bot
+    rows = store.rating("Player", "Bot")
+    assert rows[0][0] == first
+    assert [row[1] for row in rows] == sorted([player, bot], reverse=True)
+    assert store.points_to_first_place() == to_go

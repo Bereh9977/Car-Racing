@@ -5,7 +5,7 @@ import pygame
 from settings import (CHECKPOINT_COUNT, GATE_MAX_TURN_DEG, GATE_MAX_HALF_LENGTH, CHECKPOINT_FIRST_POINTS,
                       CHECKPOINT_SECOND_POINTS, LAP_WIN_POINTS, WALL_HIT_PENALTY,
                       OBSTACLE_HIT_PENALTY, WALL_HIT_COOLDOWN_MS, STREAK_MULTIPLIERS, FLAWLESS_BONUS,
-                      RACE_POINTS_FILE)
+                      RACE_POINTS_FILE, BOT_STARTING_POINTS)
 
 
 def normalize(vector):
@@ -300,11 +300,14 @@ class RaceTracker:
 
 class RacePointsStore:
     """
-    Зберігає загальну кількість очок гонки та найкращий результат для кожної карти.
+    Зберігає загальну кількість очок гонки гравця й бота та найкращий результат гравця для кожної карти.
+
+    Бот починає з форою BOT_STARTING_POINTS, тому спочатку він на першому місці рейтингу.
     """
     def __init__(self, file_path=RACE_POINTS_FILE):
         self.file_path = file_path
         self.total = 0
+        self.bot_total = BOT_STARTING_POINTS
         self.best = {}
         self.load()
 
@@ -315,24 +318,45 @@ class RacePointsStore:
             with open(self.file_path, "r") as file:
                 data = json.load(file)
             self.total = int(data.get("total", 0))
+            self.bot_total = int(data.get("bot_total", BOT_STARTING_POINTS))
             self.best = {name: int(points) for name, points in data.get("best", {}).items()}
         except (ValueError, AttributeError, TypeError):
             self.total = 0
+            self.bot_total = BOT_STARTING_POINTS
             self.best = {}
 
     def save(self):
         with open(self.file_path, "w") as file:
-            json.dump({"total": self.total, "best": self.best}, file, indent=2)
+            json.dump({"total": self.total, "bot_total": self.bot_total, "best": self.best}, file, indent=2)
 
-    def add_result(self, map_choice, points):
+    def add_result(self, map_choice, points, bot_points=0):
         """
-        Додає результат гонки та оновлює рекорд карти.
+        Додає результат гонки гравця й бота та оновлює рекорд карти.
 
+        :param map_choice: Назва карти.
+        :param points: Очки гонки гравця.
+        :param bot_points: Очки гонки бота.
         :return: True, якщо це новий рекорд для карти.
         """
         self.total += points
+        self.bot_total += bot_points
         is_best = points > self.best.get(map_choice, -1)
         if is_best:
             self.best[map_choice] = points
         self.save()
         return is_best
+
+    def rating(self, player_name, bot_name):
+        """
+        Повертає рейтинг від першого місця до останнього.
+
+        При однаковій кількості очок бот залишається вище: щоб обійти бота, треба набрати більше.
+
+        :return: Список кортежів (ім'я, очки, чи це бот).
+        """
+        rows = [(bot_name, self.bot_total, True), (player_name, self.total, False)]
+        return sorted(rows, key=lambda row: (-row[1], not row[2]))
+
+    def points_to_first_place(self):
+        """Скільки очок гравцю не вистачає, щоб обійти бота (0, якщо гравець уже перший)."""
+        return max(0, self.bot_total - self.total + 1)

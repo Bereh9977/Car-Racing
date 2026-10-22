@@ -5,6 +5,7 @@ FPS = 500
 FONT_PATH = "fonts/AveriaSansLibre-Bold.ttf"
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
+GOLD = (255, 215, 0)
 
 MENU_BACKGROUND = 'img/garage_blur.png'
 FINISH_IMAGE = 'img/finish.png'
@@ -26,6 +27,8 @@ SCORE_FILE = "score.txt"
 PURCHASED_CARS_FILE = "purchased_cars.txt"
 PURCHASED_MAPS_FILE = "purchased_maps.txt"
 RACE_POINTS_FILE = "race_points.json"
+BOT_NAME = "Bot"
+BOT_STARTING_POINTS = 5000
 
 CHECKPOINT_COUNT = 8
 GATE_MAX_TURN_DEG = 60
