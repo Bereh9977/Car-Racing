@@ -110,21 +110,38 @@ def test_first_update_after_reset_does_not_count_teleport():
     assert tracker.stats[0].next_gate == 0, "Перший кадр лише запам'ятовує позицію"
 
 
+def pass_both_gates(tracker, racer):
+    tracker.update()
+    drive(tracker, racer, 150)
+    drive(tracker, racer, 250)
+
+
+def test_checkpoint_points_added_immediately():
+    tracker, (a, _) = make_tracker()
+    tracker.update()
+    drive(tracker, a, 150)
+    assert tracker.live_points(0) == race_points.CHECKPOINT_FIRST_POINTS, "Очки за ворота нараховуються одразу"
+
+
 def test_obstacle_hit_counted_once_per_contact():
     tracker, (a, _) = make_tracker()
+    tracker.stats[0].total = 500
     for touching in (True, True, True, False, True):
         a.touching_obstacle = touching
         tracker.update()
     assert tracker.stats[0].obstacle_hits == 2
+    assert tracker.stats[0].total == 500 - 2 * race_points.OBSTACLE_HIT_PENALTY, "Штраф віднімається одразу за кожен дотик"
 
 
 def test_wall_hits_use_cooldown(mocker):
     tracker, (a, _) = make_tracker()
+    tracker.stats[0].total = 500
     ticks = mocker.patch("pygame.time.get_ticks")
     for now, touching in [(0, True), (100, True), (200, False), (300, True), (1000, True)]:
         ticks.return_value = now
         tracker.register_wall_contact(a, touching)
     assert tracker.stats[0].wall_hits == 2, "Удари в межах cooldown рахуються як один"
+    assert tracker.stats[0].total == 500 - 2 * race_points.WALL_HIT_PENALTY
 
 
 def test_unknown_racer_wall_contact_ignored():
@@ -133,41 +150,47 @@ def test_unknown_racer_wall_contact_ignored():
     assert all(stats.wall_hits == 0 for stats in tracker.stats)
 
 
-def test_finish_lap_points_and_progress_scaling():
-    tracker, (a, b) = make_tracker(gate_count=2)
+def test_points_never_go_below_zero(mocker):
+    tracker, (a, _) = make_tracker()
+    tracker.stats[0].total = 30
+    mocker.patch("pygame.time.get_ticks", return_value=0)
+    tracker.register_wall_contact(a, True)
+    assert tracker.stats[0].total == 10
+    a.touching_obstacle = True
     tracker.update()
-    drive(tracker, a, 250)
-    drive(tracker, a, 150)
-    a.x = 150
-    tracker.stats[0].previous_position = (90, 50)
+    assert tracker.stats[0].total == 0, "Очки гонки не можуть бути від'ємними"
+    a.touching_obstacle = False
     tracker.update()
-    tracker.stats[0].previous_position = (190, 50)
-    a.x = 210
+    a.touching_obstacle = True
     tracker.update()
+    assert tracker.stats[0].total == 0
+
+
+def test_penalty_reduces_points_from_earlier_laps():
+    tracker, (a, b) = make_tracker()
+    tracker.finish_lap(a)
+    assert tracker.stats[0].total == race_points.LAP_WIN_POINTS
+    a.touching_obstacle = True
+    tracker.update()
+    assert tracker.stats[0].total == race_points.LAP_WIN_POINTS - race_points.OBSTACLE_HIT_PENALTY
+
+
+def test_lap_win_points_and_loser_points():
+    tracker, (a, b) = make_tracker()
+    pass_both_gates(tracker, a)
     drive(tracker, b, 150)
-    tracker.stats[0].wall_hits = 1
     tracker.finish_lap(a)
 
     first = race_points.CHECKPOINT_FIRST_POINTS
     second = race_points.CHECKPOINT_SECOND_POINTS
-    clean = race_points.CLEAN_LAP_BONUS
-    expected_a = 2 * first + (clean - race_points.WALL_HIT_PENALTY) + race_points.LAP_WIN_POINTS
-    expected_b = second + round(clean * 0.5)
-    assert tracker.stats[0].total == expected_a
-    assert tracker.stats[1].total == expected_b, "Бонус за чисте коло переможеного залежить від прогресу"
+    assert tracker.stats[0].total == 2 * first + race_points.LAP_WIN_POINTS
+    assert tracker.stats[1].total == second, "Переможений зберігає лише очки за ворота"
     assert tracker.stats[0].total > tracker.stats[1].total
-
-
-def test_clean_bonus_never_negative():
-    tracker, (a, b) = make_tracker()
-    tracker.stats[0].wall_hits = 1000
-    tracker.finish_lap(a)
-    assert tracker.stats[0].total == race_points.LAP_WIN_POINTS
 
 
 def test_streak_multiplier_and_reset():
     tracker, (a, b) = make_tracker(gate_count=0)
-    lap = race_points.CLEAN_LAP_BONUS + race_points.LAP_WIN_POINTS
+    lap = race_points.LAP_WIN_POINTS
     tracker.finish_lap(a)
     tracker.finish_lap(a)
     assert tracker.stats[0].lap_summaries == [lap, round(lap * race_points.STREAK_MULTIPLIERS[1])]
@@ -175,6 +198,21 @@ def test_streak_multiplier_and_reset():
     assert tracker.stats[0].streak == 0
     tracker.finish_lap(a)
     assert tracker.stats[0].lap_summaries[-1] == lap, "Після програного кола серія починається спочатку"
+
+
+def test_streak_multiplies_earned_points_but_not_penalties(mocker):
+    tracker, (a, b) = make_tracker()
+    tracker.finish_lap(a)
+    start = tracker.stats[0].total
+    pass_both_gates(tracker, a)
+    mocker.patch("pygame.time.get_ticks", return_value=0)
+    tracker.register_wall_contact(a, True)
+    tracker.finish_lap(a)
+
+    earned = 2 * race_points.CHECKPOINT_FIRST_POINTS + race_points.LAP_WIN_POINTS
+    expected_lap = round(earned * race_points.STREAK_MULTIPLIERS[1]) - race_points.WALL_HIT_PENALTY
+    assert tracker.stats[0].total - start == expected_lap
+    assert tracker.stats[0].lap_summaries[-1] == expected_lap
 
 
 def test_flawless_bonus_only_for_multi_lap_sweep():
