@@ -1,6 +1,8 @@
 SCREEN_SIZE = (1920, 1080)
 WINDOW_TITLE = 'Car Racing'
 FPS = 500
+PHYSICS_RATE = 250
+MAX_FRAME_TIME = 0.1
 
 FONT_PATH = "fonts/AveriaSansLibre-Bold.ttf"
 WHITE = (255, 255, 255)
