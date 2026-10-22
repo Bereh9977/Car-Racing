@@ -22,3 +22,6 @@ purchased_maps.txt
 .vscode/
 .idea/
 .DS_Store
+
+# Race points
+race_points.json
