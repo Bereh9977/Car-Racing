@@ -72,6 +72,7 @@ class Cars:
         self.spin_speed = 10  # Швидкість обертання (градусів за кадр)
         self.frozen = False  # Прапорець заморозки
         self.controls = controls  # Тип управління
+        self.touching_obstacle = False  # Прапорець дотику до перешкоди (для очок гонки)
 
     def load_image(self, base_path):
         """
@@ -254,7 +255,8 @@ class Cars:
         :param obs: Об'єкт класу Obstacles.
         :param map_choice: Назва поточної карти.
         """
-        if obs.check_collision_obstackles(self.rect, map_choice):
+        self.touching_obstacle = obs.check_collision_obstackles(self.rect, map_choice)
+        if self.touching_obstacle:
             if map_choice == "winter":
                 self.freeze(obs)
             elif map_choice == "beach" or map_choice == "map3":
@@ -709,7 +711,7 @@ class Finish:
         self.mask = pygame.mask.from_surface(rotated_image)
         screen.blit(rotated_image, (self.x, self.y))
 
-    def crossed(self, screen, aspect_ratio, car1, car2, score=None):
+    def crossed(self, screen, aspect_ratio, car1, car2, score=None, race_tracker=None):
         """
         Перевіряє, чи перетнули машини фініш, і визначає переможця.
 
@@ -718,16 +720,21 @@ class Finish:
         :param car1: Перший автомобіль.
         :param car2: Другий автомобіль.
         :param score: Об'єкт Score (опціонально).
+        :param race_tracker: Об'єкт RaceTracker для очок гонки (опціонально).
         :return: True, якщо гонка завершена, інакше False.
         """
         if self.car1_wins + self.car2_wins == self.required_circles:
+            details = None
+            if race_tracker is not None:
+                race_tracker.finish_race(self.required_circles)
+                details = race_tracker.summary_lines()
             if self.car1_wins > self.car2_wins:
-                self.show_result(screen, aspect_ratio, 'Car 1 Wins!', "soundeffects/car1_win.mp3")
+                self.show_result(screen, aspect_ratio, 'Car 1 Wins!', "soundeffects/car1_win.mp3", details)
                 self.credit_prize(score, 200)
             elif self.car1_wins < self.car2_wins:
-                self.show_result(screen, aspect_ratio, 'Car 2 Wins!', "soundeffects/car2_win.mp3")
+                self.show_result(screen, aspect_ratio, 'Car 2 Wins!', "soundeffects/car2_win.mp3", details)
             else:
-                self.show_result(screen, aspect_ratio, 'It\'s a Tie!', "soundeffects/tie.mp3")
+                self.show_result(screen, aspect_ratio, 'It\'s a Tie!', "soundeffects/tie.mp3", details)
                 self.credit_prize(score, 100)
             return True
 
@@ -737,11 +744,15 @@ class Finish:
             if self.car1_wins == 0:
                 overlay_music_in_loop("soundeffects/car1_win_pt1.mp3")
             self.car1_wins += 1
+            if race_tracker is not None:
+                race_tracker.finish_lap(car1)
             self.finish_circle(screen, aspect_ratio, car1, car2)
         elif car2.cross_finish(car2_collision_point, self.required_side):
             if self.car2_wins == 0:
                 overlay_music_in_loop("soundeffects/car2_win_pt1.mp3")
             self.car2_wins += 1
+            if race_tracker is not None:
+                race_tracker.finish_lap(car2)
             self.finish_circle(screen, aspect_ratio, car1, car2)
         return False
 
@@ -771,7 +782,7 @@ class Finish:
         self.draw_message(screen, aspect_ratio, f"Circle #{self.car1_wins + self.car2_wins} out of {self.required_circles} done!")
         time.sleep(1)
 
-    def show_result(self, screen, aspect_ratio, message, musicPath):
+    def show_result(self, screen, aspect_ratio, message, musicPath, details=None):
         """
         Відображає результат гонки.
 
@@ -779,10 +790,22 @@ class Finish:
         :param aspect_ratio: Розмір екрану.
         :param message: Повідомлення про результат.
         :param musicPath: Шлях до звуку результату.
+        :param details: Додаткові рядки під результатом (наприклад, очки гонки).
         """
         self.draw_message(screen, aspect_ratio, message)
+        if details:
+            self.draw_details(screen, aspect_ratio, details)
         overlay_music_in_loop(musicPath)
         time.sleep(6)
+
+    @staticmethod
+    def draw_details(screen, aspect_ratio, lines):
+        font = pygame.font.Font(FONT_PATH, 44)
+        center_x, center_y = center_of(aspect_ratio)
+        for number, line in enumerate(lines):
+            text = font.render(line, True, WHITE, (0, 0, 0))
+            screen.blit(text, text.get_rect(center=(center_x, center_y + 80 + number * 55)))
+        pygame.display.update()
 
     @staticmethod
     def draw_message(screen, aspect_ratio, message):

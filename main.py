@@ -4,6 +4,7 @@ from menus import Menu, MapsMenu, CarsMenu, ModesMenu
 from music import overlay_music_in_loop, next_track, mute_music, music_playing
 from utilities import scale_image
 from maps_config import get_map_config
+from race_points import RaceTracker, RacePointsStore, build_gates
 from settings import (SCREEN_SIZE, WINDOW_TITLE, FPS, FONT_PATH, WHITE, MENU_BACKGROUND,
                       FINISH_IMAGE, COIN_IMAGE, BUTTON_SOUND, CAR_IMAGES, DEFAULT_CAR_IMAGE, 
                       CARSCENE_MAP2, AUDIO_MAP2, CARSCENE_WINTER, AUDIO_WINTER, CARSCENE_MAP3, 
@@ -52,6 +53,9 @@ class GameSys:
         self.pause_font = pygame.font.Font(FONT_PATH, 36)  # Шрифт для тексту паузи
         self.pause_text = self.pause_font.render('Paused', True, WHITE)  # Текст паузи
         self.pause_rect = self.pause_text.get_rect(center=(self.aspect_ratio[0]//2 - 15, self.aspect_ratio[1]//2))  # Позиція тексту паузи
+        self.race_tracker = None  # Очки гонки поточного заїзду
+        self.race_points_store = RacePointsStore()  # Збережені очки гонки
+        self.hud_font = pygame.font.Font(FONT_PATH, 36)  # Шрифт для очок гонки
 
     @staticmethod
     def load_countdown_images():
@@ -89,6 +93,8 @@ class GameSys:
 
             self.handle_road_collisions()
             self.bot.move()  # Рух бота
+            if self.race_tracker is not None:
+                self.race_tracker.update()  # Перевірка контрольних воріт
             clock.tick(FPS)  # Обмеження FPS
 
         pygame.quit()  # Завершення роботи Pygame
@@ -161,15 +167,42 @@ class GameSys:
         self.car.draw(self.screen)  # Малювання гравця
         self.car.update_car(self.obs, self.map_choice, self.score)  # Оновлення стану гравця
         self.bot.draw(self.screen)  # Малювання бота
-        new_game = self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score)  # Перевірка перетину фінішу
+        self.draw_race_overlay()
+        new_game = self.finish.crossed(self.screen, self.aspect_ratio, self.car, self.bot, self.score, self.race_tracker)  # Перевірка перетину фінішу
         self.score.draw_score(self.screen)  # Відображення очок
+        if new_game:
+            self.save_race_points()
         return new_game
 
     def update_doubles(self):
         for car in (self.car1, self.car2):
             car.draw(self.screen)
             car.update_car(self.obs, self.map_choice, self.score, self.mode_choice)
-        return self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2)  # Перевірка перетину фінішу
+        self.draw_race_overlay()
+        return self.finish.crossed(self.screen, self.aspect_ratio, self.car1, self.car2, race_tracker=self.race_tracker)  # Перевірка перетину фінішу
+
+    def create_race_tracker(self, map_choice):
+        config = get_map_config(map_choice)
+        gates = build_gates(config.bot_points, self.roads.contour_mask, config.checkpoint_overrides)
+        if self.mode_choice == 'single':
+            return RaceTracker(gates, (self.car, self.bot), ("You", "Bot"))
+        return RaceTracker(gates, (self.car1, self.car2), ("Car 1", "Car 2"))
+
+    def draw_race_overlay(self):
+        if self.race_tracker is None:
+            return
+        if self.mode_choice == 'single':
+            self.draw_hud_text(f"Race: {self.race_tracker.live_points(0)}", (1700, 55))
+        else:
+            self.draw_hud_text(f"Car 1: {self.race_tracker.live_points(0)}", (20, 10))
+            self.draw_hud_text(f"Car 2: {self.race_tracker.live_points(1)}", (20, 55))
+
+    def draw_hud_text(self, text, position):
+        self.screen.blit(self.hud_font.render(text, True, WHITE), position)
+
+    def save_race_points(self):
+        if self.race_tracker is not None:
+            self.race_points_store.add_result(self.map_choice, self.race_tracker.stats[0].total)
 
     def handle_game_events(self):
         for event in pygame.event.get():
@@ -188,8 +221,11 @@ class GameSys:
 
     def handle_road_collisions(self):
         for car in (self.car, self.car1, self.car2):
-            if car.collide(self.roads.contour_mask):
+            touching = car.collide(self.roads.contour_mask) is not None
+            if touching:
                 car.bounce()  # Відштовхування від країв
+            if self.race_tracker is not None:
+                self.race_tracker.register_wall_contact(car, touching)
 
     def draw_page(self, page):
         self.screen.blit(self.background, (0, 0))
@@ -262,6 +298,7 @@ class GameSys:
             self.create_objects_single(map_choice)  # Ініціалізація об'єктів для одиночного режиму
         else:
             self.create_objects_doubles(map_choice)  # Ініціалізація об'єктів для двогравцевого режиму
+        self.race_tracker = self.create_race_tracker(map_choice)  # Очки гонки для нового заїзду
 
     def show_cars(self):
         """

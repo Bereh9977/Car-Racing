@@ -9,6 +9,7 @@ class MapConfig:
     bot_points: list
     doubles_cars: tuple
     finish_kwargs: dict = field(default_factory=dict)
+    checkpoint_overrides: dict = field(default_factory=dict)
 
 
 MAPS = {
