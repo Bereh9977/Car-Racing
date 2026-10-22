@@ -3,9 +3,9 @@ import math
 import os
 import pygame
 from settings import (CHECKPOINT_COUNT, GATE_MAX_TURN_DEG, GATE_MAX_HALF_LENGTH, CHECKPOINT_FIRST_POINTS,
-                      CHECKPOINT_SECOND_POINTS, LAP_WIN_POINTS, CLEAN_LAP_BONUS, WALL_HIT_PENALTY,
+                      CHECKPOINT_SECOND_POINTS, LAP_WIN_POINTS, WALL_HIT_PENALTY,
                       OBSTACLE_HIT_PENALTY, WALL_HIT_COOLDOWN_MS, STREAK_MULTIPLIERS, FLAWLESS_BONUS,
-                      RACE_POINTS_FILE)
+                      RACE_POINTS_FILE, BOT_STARTING_POINTS)
 
 
 def normalize(vector):
@@ -169,6 +169,7 @@ class RacerStats:
         self.reset_lap()
 
     def reset_lap(self):
+        self.lap_start_total = self.total
         self.next_gate = 0
         self.checkpoint_points = 0
         self.wall_hits = 0
@@ -182,10 +183,11 @@ class RaceTracker:
     """
     Клас RaceTracker нараховує очки гонки (окремо від монет).
 
-    Очки складаються з:
-    - очок за контрольні точки (першому більше, ніж другому);
-    - бонусу за чисте проходження кола (мінус за удари об стіни та перешкоди);
-    - множника за серію виграних кіл та бонусу за ідеальну гонку.
+    Очки змінюються одразу під час гонки:
+    - за контрольні точки нараховуються очки (першому більше, ніж другому);
+    - за удари об стіни та перешкоди очки віднімаються (але не нижче 0);
+    - за вигране коло нараховуються очки з множником за серію перемог;
+    - за ідеальну гонку нараховується бонус.
     """
     def __init__(self, gates, racers, names):
         """
@@ -221,16 +223,23 @@ class RaceTracker:
             touching_obstacle = getattr(racer, 'touching_obstacle', False)
             if touching_obstacle and not stats.touching_obstacle:
                 stats.obstacle_hits += 1
+                self.apply_penalty(stats, OBSTACLE_HIT_PENALTY)
             stats.touching_obstacle = touching_obstacle
 
     def claim_gate(self, stats):
         gate_number = stats.next_gate
         if self.gate_claimed[gate_number]:
-            stats.checkpoint_points += CHECKPOINT_SECOND_POINTS
+            points = CHECKPOINT_SECOND_POINTS
         else:
-            stats.checkpoint_points += CHECKPOINT_FIRST_POINTS
+            points = CHECKPOINT_FIRST_POINTS
             self.gate_claimed[gate_number] = True
+        stats.checkpoint_points += points
+        stats.total += points
         stats.next_gate += 1
+
+    @staticmethod
+    def apply_penalty(stats, amount):
+        stats.total = max(0, stats.total - amount)
 
     def register_wall_contact(self, racer, touching):
         """
@@ -245,35 +254,29 @@ class RaceTracker:
         now = pygame.time.get_ticks()
         if stats.last_wall_hit is None or now - stats.last_wall_hit >= WALL_HIT_COOLDOWN_MS:
             stats.wall_hits += 1
+            self.apply_penalty(stats, WALL_HIT_PENALTY)
         stats.last_wall_hit = now
 
     def finish_lap(self, winner):
         """
-        Нараховує очки за коло. Викликається, коли переможець кола перетнув фініш.
+        Нараховує очки за вигране коло з множником за серію перемог.
+        Викликається, коли переможець кола перетнув фініш.
+
+        Множник застосовується до зароблених за коло очок (контрольні точки та перемога),
+        штрафи не множаться.
 
         :param winner: Учасник, що першим перетнув фініш.
         """
         for racer, stats in zip(self.racers, self.stats):
-            won = racer is winner
-            if won:
-                progress = 1
-            else:
-                progress = stats.next_gate / len(self.gates) if self.gates else 0
-            penalty = stats.wall_hits * WALL_HIT_PENALTY + stats.obstacle_hits * OBSTACLE_HIT_PENALTY
-            clean_bonus = round(max(0, CLEAN_LAP_BONUS - penalty) * progress)
-            lap_points = stats.checkpoint_points + clean_bonus + (LAP_WIN_POINTS if won else 0)
-
-            if won:
+            if racer is winner:
                 stats.streak += 1
                 stats.laps_won += 1
                 multiplier = STREAK_MULTIPLIERS[min(stats.streak, len(STREAK_MULTIPLIERS)) - 1]
+                earned = stats.checkpoint_points + LAP_WIN_POINTS
+                stats.total += round(earned * multiplier) - stats.checkpoint_points
             else:
                 stats.streak = 0
-                multiplier = 1
-
-            lap_total = round(lap_points * multiplier)
-            stats.total += lap_total
-            stats.lap_summaries.append(lap_total)
+            stats.lap_summaries.append(stats.total - stats.lap_start_total)
         self.new_lap()
 
     def finish_race(self, required_circles):
@@ -288,9 +291,8 @@ class RaceTracker:
                 stats.lap_summaries.append(f"flawless +{FLAWLESS_BONUS}")
 
     def live_points(self, index):
-        """Очки учасника з урахуванням поточного кола (для відображення під час гонки)."""
-        stats = self.stats[index]
-        return stats.total + stats.checkpoint_points
+        """Поточні очки гонки учасника (для відображення під час гонки)."""
+        return self.stats[index].total
 
     def summary_lines(self):
         return [f"{stats.name}: {stats.total} race points" for stats in self.stats]
@@ -298,11 +300,14 @@ class RaceTracker:
 
 class RacePointsStore:
     """
-    Зберігає загальну кількість очок гонки та найкращий результат для кожної карти.
+    Зберігає загальну кількість очок гонки гравця й бота та найкращий результат гравця для кожної карти.
+
+    Бот починає з форою BOT_STARTING_POINTS, тому спочатку він на першому місці рейтингу.
     """
     def __init__(self, file_path=RACE_POINTS_FILE):
         self.file_path = file_path
         self.total = 0
+        self.bot_total = BOT_STARTING_POINTS
         self.best = {}
         self.load()
 
@@ -313,24 +318,45 @@ class RacePointsStore:
             with open(self.file_path, "r") as file:
                 data = json.load(file)
             self.total = int(data.get("total", 0))
+            self.bot_total = int(data.get("bot_total", BOT_STARTING_POINTS))
             self.best = {name: int(points) for name, points in data.get("best", {}).items()}
         except (ValueError, AttributeError, TypeError):
             self.total = 0
+            self.bot_total = BOT_STARTING_POINTS
             self.best = {}
 
     def save(self):
         with open(self.file_path, "w") as file:
-            json.dump({"total": self.total, "best": self.best}, file, indent=2)
+            json.dump({"total": self.total, "bot_total": self.bot_total, "best": self.best}, file, indent=2)
 
-    def add_result(self, map_choice, points):
+    def add_result(self, map_choice, points, bot_points=0):
         """
-        Додає результат гонки та оновлює рекорд карти.
+        Додає результат гонки гравця й бота та оновлює рекорд карти.
 
+        :param map_choice: Назва карти.
+        :param points: Очки гонки гравця.
+        :param bot_points: Очки гонки бота.
         :return: True, якщо це новий рекорд для карти.
         """
         self.total += points
+        self.bot_total += bot_points
         is_best = points > self.best.get(map_choice, -1)
         if is_best:
             self.best[map_choice] = points
         self.save()
         return is_best
+
+    def rating(self, player_name, bot_name):
+        """
+        Повертає рейтинг від першого місця до останнього.
+
+        При однаковій кількості очок бот залишається вище: щоб обійти бота, треба набрати більше.
+
+        :return: Список кортежів (ім'я, очки, чи це бот).
+        """
+        rows = [(bot_name, self.bot_total, True), (player_name, self.total, False)]
+        return sorted(rows, key=lambda row: (-row[1], not row[2]))
+
+    def points_to_first_place(self):
+        """Скільки очок гравцю не вистачає, щоб обійти бота (0, якщо гравець уже перший)."""
+        return max(0, self.bot_total - self.total + 1)

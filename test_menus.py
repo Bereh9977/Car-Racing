@@ -309,3 +309,27 @@ def test_countdown_sleep_and_draw(monkeypatch, mode_choice):
         assert "car2" in car_calls
         assert "car" not in car_calls
         assert "bot" not in car_calls
+
+@pytest.mark.parametrize("player, bot, expected", [
+    (100, 5000, "Mission: beat Bot! 4901 race points to go"),
+    (6000, 5000, "Mission complete! You beat Bot!"),
+])
+def test_rating_mission_text(tmp_path, player, bot, expected):
+    from race_points import RacePointsStore
+    store = RacePointsStore(str(tmp_path / "race_points.json"))
+    store.total, store.bot_total = player, bot
+    menu = Menu(0, 0, race_points_file=str(tmp_path / "race_points.json"))
+    assert menu.mission_text(store) == expected
+
+
+def test_rating_draws_leader_on_first_row(tmp_path, mocker):
+    from race_points import RacePointsStore
+    store = RacePointsStore(str(tmp_path / "race_points.json"))
+    store.total, store.bot_total = 7000, 5000
+    menu = Menu(800, 450, username="Player")
+    draw_row = mocker.patch.object(menu, "draw_rating_row")
+    menu.draw_rating(pygame.Surface((1920, 1080)), store)
+    first, second = draw_row.call_args_list
+    assert first.args[1:4] == (1, menu.avatar, "Player")
+    assert second.args[1:4] == (2, menu.avatar_bot, "Bot")
+    assert first.args[5] < second.args[5], "Перше місце має бути вище"

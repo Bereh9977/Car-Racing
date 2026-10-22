@@ -202,7 +202,8 @@ class GameSys:
 
     def save_race_points(self):
         if self.race_tracker is not None:
-            self.race_points_store.add_result(self.map_choice, self.race_tracker.stats[0].total)
+            player, bot = self.race_tracker.stats
+            self.race_points_store.add_result(self.map_choice, player.total, bot.total)
 
     def handle_game_events(self):
         for event in pygame.event.get():
