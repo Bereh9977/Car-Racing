@@ -40,3 +40,16 @@ OBSTACLE_HIT_PENALTY = 50
 WALL_HIT_COOLDOWN_MS = 500
 STREAK_MULTIPLIERS = (1, 1.5, 2)
 FLAWLESS_BONUS = 200
+
+CARSCENE_MAP2 = "video/begin_map2.mp4"
+AUDIO_MAP2 = "video/begin_map2.mp3"
+CARSCENE_WINTER = "video/begin_winter.mp4"
+AUDIO_WINTER = "video/begin_winter.mp3"
+CARSCENE_MAP3 = "video/begin_map3.mp4"
+AUDIO_MAP3 = "video/begin_map3.mp3"
+CARSCENE_SUMMER = "video/begin_summer.mp4"
+AUDIO_SUMMER = "video/begin_summer.mp3"
+CARSCENE_CHAMPION_FIELD = "video/begin_champion_field.mp4"
+AUDIO_CHAMPION_FIELD = "video/begin_champion_field.mp3"
+CARSCENE_BEACH = "video/begin_beach.mp4"
+AUDIO_BEACH = "video/begin_beach.mp3"

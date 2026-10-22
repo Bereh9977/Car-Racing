@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from music import overlay_music_in_loop, start_music, stop_music
 from utilities import center_of, load_set_from_file, save_lines_to_file
 from settings import FONT_PATH, WHITE, BUTTON_SOUND, PURCHASE_SOUND, PURCHASED_CARS_FILE, PURCHASED_MAPS_FILE
+import re
 import time
 
 
@@ -18,7 +19,13 @@ class Menu:
         ('N - play the next audio track', (720, 365)),
     ]
 
-    def __init__(self, x, y):
+    AVATAR_SIZE = 120
+    PLAYER_ROW_LEFT = 250
+    PLAYER_ROW_CENTER_Y = 400
+    PLAYER_ROW_RIGHT = 250
+    BOT_ROW_CENTER_Y = 230
+
+    def __init__(self, x, y, username="Yahtzee", score_file="score.txt", avatar_path="img/user_icon.png", avatar_bot_path="img/bot_icon.png"):
         """
         Ініціалізує об'єкт головного меню.
 
@@ -30,7 +37,7 @@ class Menu:
         self.imageStart = self.load_image("img/start.png", (289, 143))  # Кнопка "Старт"
         self.imageOptions = self.load_image("img/options.png", (289, 143))  # Кнопка "Опції"
         self.imageBack = self.load_image("img/back.png", (288, 103))  # Кнопка "Назад"
-        self.leadorboard = self.load_image("img/leaderboard.png", (1234, 817))  # Таблиця лідерів
+        self.leadorboard = self.load_image("img/leaderboard_new.png", (1234, 817))  # Таблиця лідерів
         self.rating_btn = self.load_image("img/rating_btn.png", (287, 141))  # Кнопка "Рейтинг"
         self.menu_back_bnt = self.load_image("img/menu_btn.png", (232, 83))  # Кнопка повернення в меню
         self.on_music = self.load_image("img/on_music.png", (288, 103))  # Кнопка увімкнення музики
@@ -54,6 +61,12 @@ class Menu:
         self.volume = 0.5  # Початкова гучність (0.0 - 1.0)
         self.knob_x = self.slider_x + int(self.volume * self.slider_width)  # Позиція повзунка
         self.dragging = False  # Прапорець перетягування повзунка
+
+        self.username = username
+        self.score_file = score_file
+        self.avatar = self.load_image(avatar_path, (self.AVATAR_SIZE, self.AVATAR_SIZE))
+        self.avatar_bot = self.load_image(avatar_bot_path, (self.AVATAR_SIZE, self.AVATAR_SIZE))
+        self.rating_font = pygame.font.Font(FONT_PATH, 48)
 
     def load_image(self, path, size):
         """
@@ -178,19 +191,72 @@ class Menu:
                     if self.dragging:
                         self.update_volume(event.pos[0])
 
+    def load_score(self):
+        """
+        Читає очки гравця з файлу.
+        """
+        with open(self.score_file, "r") as file:
+            self.current_score = int(file.read().strip())
+        return self.current_score
+
+    def draw_player_row(self, screen, name_surface, score_surface):
+        """
+        Малює рядок гравця на таблиці лідерів: іконка, ім'я та очки.
+
+        :param screen: Поверхня Pygame для відображення.
+        :param name_surface: Готовий рендер імені.
+        :param score_surface: Готовий рендер очок.
+        """
+        board = self.leadorboard_rect
+        center_y = board.top + self.PLAYER_ROW_CENTER_Y
+
+        avatar_rect = self.avatar.get_rect(midleft=(board.left + self.PLAYER_ROW_LEFT, center_y))
+        name_rect = name_surface.get_rect(midleft=(avatar_rect.right + 30, center_y))
+        score_rect = score_surface.get_rect(midright=(board.right - self.PLAYER_ROW_RIGHT, center_y))
+
+        screen.blit(self.avatar, avatar_rect)
+        screen.blit(name_surface, name_rect)
+        screen.blit(score_surface, score_rect)
+
+    def draw_bot_row(self, screen, name_surface, score_surface):
+        """
+        Малює рядок бота на таблиці лідерів: іконка, ім'я та очки.
+
+        :param screen: Поверхня Pygame для відображення.
+        :param name_surface: Готовий рендер імені.
+        :param score_surface: Готовий рендер очок.
+        """
+        board = self.leadorboard_rect
+        center_y = board.top + self.BOT_ROW_CENTER_Y
+
+        avatar_bot_rect = self.avatar_bot.get_rect(midleft=(board.left + self.PLAYER_ROW_LEFT, center_y))
+        name_rect = name_surface.get_rect(midleft=(avatar_bot_rect.right + 30, center_y))
+        score_rect = score_surface.get_rect(midright=(board.right - self.PLAYER_ROW_RIGHT, center_y))
+
+        screen.blit(self.avatar_bot, avatar_bot_rect)
+        screen.blit(name_surface, name_rect)
+        screen.blit(score_surface, score_rect)
+
     def show_rating(self, screen, background):
         """
-        Відображає таблицю лідерів.
+        Відображає таблицю лідерів із іконкою, ім'ям та очками гравця.
 
         :param screen: Поверхня Pygame для відображення.
         :param background: Фонове зображення.
         """
+        # Очки читаємо один раз при відкритті екрана, а не щокадру
+        name_surface = self.rating_font.render(self.username, True, WHITE)
+        score_surface_player = self.rating_font.render(str(self.load_score()), True, WHITE)
+        score_surface_bot = self.rating_font.render(str(10000), True, WHITE)
+
         rating_active = True
         while rating_active:
             screen.fill((0, 0, 0))
             screen.blit(background, (0, 0))
             screen.blit(self.imageBack, self.back_rect2)
             screen.blit(self.leadorboard, self.leadorboard_rect)
+            self.draw_player_row(screen, name_surface, score_surface_player)
+            self.draw_bot_row(screen, name_surface, score_surface_bot)
             pygame.display.update()
 
             for event in pygame.event.get():
